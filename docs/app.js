@@ -460,6 +460,95 @@ async function init() {
 
 document.addEventListener("DOMContentLoaded", init);
 
+/* =========================
+   CSV Export (DATA-BASED)
+========================= */
+function csvEscape(v){
+  const s = String(v ?? "");
+  return /[,"\n\r]/.test(s) ? `"${s.replaceAll('"','""')}"` : s;
+}
+
+function rowsToCSV(headers, rows){
+  const head = headers.map(csvEscape).join(",");
+  const body = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+  // Excel 한글 깨짐 방지 BOM
+  return "\ufeff" + head + "\n" + body;
+}
+
+function downloadCSV(filename, csvText){
+  const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportCurrentTabCSV(){
+  if (!selectedISO3){
+    alert("먼저 국가를 선택하세요.");
+    return;
+  }
+  const d = countryData?.[selectedISO3];
+  if (!d){
+    alert(`데이터가 없습니다: ${selectedISO3}`);
+    return;
+  }
+
+  let headers = [];
+  let rows = [];
+  let filename = `${selectedISO3}_${activeTab}.csv`;
+
+  if (activeTab === "materials"){
+    headers = ["품목","가격","단위"];
+    rows = (d.materials || []).map(x => [x.item, x.price, x.unit]);
+    filename = `${selectedISO3}_원자재가격.csv`;
+  }
+
+  else if (activeTab === "labor"){
+    headers = ["직종","임금","단위"];
+    rows = (d.labor || []).map(x => [x.role, x.wage, x.unit]);
+    filename = `${selectedISO3}_인건비.csv`;
+  }
+
+  else if (activeTab === "nonwork"){
+    const arr = d.nonWorkDays || [];
+    if (!arr.length){
+      alert("비작업일수 데이터가 없습니다.");
+      return;
+    }
+    const isUAE = arr[0].storm !== undefined;
+
+    headers = isUAE
+      ? ["월","평균기온(°C)","평균최고/최저(°C)","모래폭풍(회/월)","주말(토+일)","공휴일(평일)","확정 비작업일","등가 비작업일(8h)","비고"]
+      : ["월","평균기온(°C)","평균최고/최저(°C)","강우일(일/월,>=1mm)","주말(토+일)","공휴일(평일)","확정 비작업일","등가 비작업일(8h)","비고"];
+
+    rows = arr.map(x => isUAE
+      ? [x.month, x.avgTemp, x.avgHighLow, x.storm, x.weekend, x.holidayWeekday, x.fixedOff, x.eqOff8h, x.note]
+      : [x.month, x.avgTemp, x.avgHighLow, x.rainDays, x.weekend, x.holidayWeekday, x.fixedOff, x.eqOff8h, x.note]
+    );
+
+    filename = `${selectedISO3}_비작업일수.csv`;
+  }
+
+  else if (activeTab === "ppp"){
+    // 원하면 PPP도 CSV로 내보내기 (링크 2개)
+    headers = ["구분","URL"];
+    rows = [
+      ["PPP 제도", d.ppp?.lawUrl || ""],
+      ["PPP 발주현황", d.ppp?.statusUrl || ""]
+    ];
+    filename = `${selectedISO3}_PPP링크.csv`;
+  }
+
+  const csv = rowsToCSV(headers, rows);
+  downloadCSV(filename, csv);
+}
+
+$("csvBtn").addEventListener("click", exportCurrentTabCSV);
 
 
 
