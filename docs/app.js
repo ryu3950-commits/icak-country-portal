@@ -205,33 +205,11 @@ function renderPanel(isoRaw, fallbackName) {
   // 제목
   const title = (iso && countryData?.[iso]?.name_ko) || fallbackName || (isoRaw || "선택 국가");
 
-  // ✅ ISO가 없더라도 "ISO 못찾음" 대신 부드럽게 안내
-  if (!iso) {
-    setInfo(
-      title,
-      tabs +
-        `<div class="muted">
-          이 국가는 지도에서 선택/음영은 되지만, <b>ISO3 매칭이 안돼서</b> countryData.json 데이터가 표시되지 않습니다.<br/>
-          (현재는 UAE/베트남만 이름 fallback으로 자동 매칭됩니다)
-        </div>`
-    );
-    return;
-  }
+
 
   const d = countryData[iso];
 
-  // 데이터 없을 때 안내
-  if (!d) {
-    const available = Object.keys(countryData).join(", ");
-    setInfo(
-      title,
-      tabs +
-        `<div>이 국가는 아직 데이터가 없습니다.</div>
-         <div class="muted">countryData.json에 들어있는 ISO3: <b>${esc(available || "-")}</b></div>
-         <div class="muted">테스트는 UAE(ARE) / 베트남(VNM)을 클릭해보세요.</div>`
-    );
-    return;
-  }
+
 
   const updated = d.materialsUpdated || d.updated || "—";
 
@@ -516,4 +494,5 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
 
