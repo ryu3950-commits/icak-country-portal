@@ -1,4 +1,4 @@
-// ✅ app.js (메시지 간결화 + ISO 없어도 정상 선택/하이라이트 + 치명 오류(따옴표/널참조) 수정)
+// app.js (오류/매칭 수정 + 안내 문구 간결 버전)
 
 const GEOJSON_URLS = [
   "./data/countries.geojson",
@@ -32,12 +32,12 @@ let map;
 let countriesGeo = null;
 let countryData = {};
 
-// ✅ 선택 상태
-let selectedISO = null;      // "ARE" 같은 ISO3 (없으면 null)
-let selectedIsoRaw = "UNK";  // "ARE" or "UNK" (탭 클릭 시 재렌더용)
-let selectedFID = null;      // GeoJSON feature id (항상 있음)
-let selectedName = null;     // 표시용 국가명
-let view = "materials";      // materials | nonwork
+// 선택 상태
+let selectedISO = null;     // "ARE" 같은 ISO3 (없으면 null)
+let selectedIsoRaw = "UNK"; // 원본 ISO 값 (UNK 포함)
+let selectedFID = null;     // 항상 있는 feature id(내부)
+let selectedName = null;    // 표시용 국가명
+let view = "materials";     // materials | nonwork
 
 // ---- helpers ----
 const isIso3 = (v) => typeof v === "string" && /^[A-Z]{3}$/.test(v) && v !== "-99";
@@ -55,17 +55,13 @@ function setInfo(title, html) {
   infoBody.innerHTML = html;
 }
 
-function showDefault() {
-  setInfo("국가를 선택하세요", `<div class="muted">지도에서 국가를 클릭하거나 검색하세요.</div>`);
-}
-
 async function fetchJsonFirstOk(urls, label) {
   let lastErr = null;
   for (const url of urls) {
     try {
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) {
-        lastErr = new Error(`${label} (${res.status})`);
+        lastErr = new Error(`${label} 로드 실패: ${url} (${res.status})`);
         continue;
       }
       const json = await res.json();
@@ -77,7 +73,7 @@ async function fetchJsonFirstOk(urls, label) {
   throw lastErr || new Error(`${label} 로드 실패`);
 }
 
-// GeoJSON에서 "표시 이름"
+// 표시 이름
 function getName(props = {}) {
   return (
     props.NAME_KO ||
@@ -91,7 +87,7 @@ function getName(props = {}) {
   );
 }
 
-// GeoJSON에서 ISO3 최대한 뽑기(가능한 후보를 넓게)
+// ISO3 뽑기
 function getISOFromProps(props = {}) {
   const candidates = [
     "ISO_A3",
@@ -108,15 +104,18 @@ function getISOFromProps(props = {}) {
     "ISO_3",
     "iso_3",
   ];
-  for (const k of candidates) if (isIso3(props[k])) return String(props[k]).toUpperCase();
+  for (const k of candidates) {
+    const v = props[k];
+    if (isIso3(v)) return String(v).toUpperCase();
+  }
 
+  // 값 자체 훑기(마지막 방어)
   for (const v of Object.values(props)) {
     if (isIso3(v)) return String(v).toUpperCase();
   }
   return null;
 }
 
-// 이름 기반 최소 fallback (UAE/VNM만 보정)
 function isoFallbackByName(name) {
   const n = norm(name);
   if (n.includes("united arab emirates") || n.includes("uae") || n.includes("아랍에미리트")) return "ARE";
@@ -124,7 +123,7 @@ function isoFallbackByName(name) {
   return null;
 }
 
-// ✅ ISO 없어도 클릭/하이라이트 되게: __fid(고유 id)를 무조건 부여
+// ✅ __name / __iso / __fid 를 강제로 넣어서 “클릭-하이라이트-검색” 안정화
 function preprocessCountriesGeo(geo) {
   const features = geo?.features || [];
   for (let i = 0; i < features.length; i++) {
@@ -132,13 +131,17 @@ function preprocessCountriesGeo(geo) {
     f.properties = f.properties || {};
 
     const name = getName(f.properties) || "Unknown";
-    f.properties.__name = name;
-
     const iso = getISOFromProps(f.properties) || isoFallbackByName(name) || "UNK";
-    f.properties.__iso = iso;
 
+    // fid(항상 존재)
     const fid = (f.id !== undefined && f.id !== null) ? f.id : i;
+
+    f.properties.__name = name;
+    f.properties.__iso = iso;
     f.properties.__fid = fid;
+
+    // (선택) feature.id도 넣어두면 디버깅/호환에 도움
+    if (f.id === undefined || f.id === null) f.id = fid;
   }
   return geo;
 }
@@ -148,10 +151,8 @@ function computeBbox(geometry) {
 
   const visit = (c) => {
     const [x, y] = c;
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
+    minX = Math.min(minX, x); minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
   };
 
   const walk = (arr) => {
@@ -160,11 +161,10 @@ function computeBbox(geometry) {
     for (const a of arr) walk(a);
   };
 
-  walk(geometry.coordinates);
+  walk(geometry?.coordinates);
   return [[minX, minY], [maxX, maxY]];
 }
 
-// ✅ 하이라이트는 fid로 처리 (ISO 없어도 100% 작동)
 function highlightFID(fid) {
   if (!map?.getLayer("countries-selected")) return;
 
@@ -180,8 +180,8 @@ function highlightFID(fid) {
 
 // ===== 패널 렌더 =====
 function renderPanel(isoRaw, fallbackName) {
-  // ISO가 UNK면 데이터 매칭은 안 하고 "데이터 없음"만 표시
-  const iso = (isIso3(isoRaw) && isoRaw !== "UNK") ? isoRaw : null;
+  selectedIsoRaw = isoRaw || "UNK";
+  const iso = (isIso3(selectedIsoRaw) && selectedIsoRaw !== "UNK") ? selectedIsoRaw : null;
   selectedISO = iso;
 
   const tabs = `
@@ -191,56 +191,43 @@ function renderPanel(isoRaw, fallbackName) {
     </div>
   `;
 
-  const title =
-    (iso && countryData?.[iso]?.name_ko) ||
-    fallbackName ||
-    "국가를 선택하세요";
+  const title = (iso && countryData?.[iso]?.name_ko) || fallbackName || "국가를 선택하세요";
 
+  // ISO가 없거나(UNK) 데이터가 없으면: 깔끔한 안내만
   if (!iso) {
-    setInfo(title, tabs + `<div class="muted">데이터가 없습니다.</div>`);
+    setInfo(title, tabs + `<div class="muted">이 국가의 상세 데이터가 없습니다.</div>`);
     return;
   }
 
   const d = countryData?.[iso];
   if (!d) {
-    setInfo(title, tabs + `<div class="muted">데이터가 없습니다.</div>`);
+    setInfo(title, tabs + `<div class="muted">이 국가의 상세 데이터가 없습니다.</div>`);
     return;
   }
 
   const updated = d.materialsUpdated || d.updated || "—";
 
   // 자재비 테이블
-  const matRows = (d.materials || [])
-    .map((r) => `
-      <tr>
-        <td>${esc(r.item)}</td>
-        <td class="right">${
-          typeof r.price === "number"
-            ? r.price.toLocaleString(undefined, { maximumFractionDigits: 3 })
-            : esc(r.price)
-        }</td>
-        <td>${esc(r.unit)}</td>
-        <td>${esc(r.asOf || "-")}</td>
-      </tr>
-    `)
-    .join("");
-
-  const labor = d.labor || {};
-  const laborBlock = `
-    <div class="muted" style="margin-top:8px;">
-      인건비(예시): 단순 <b>$${esc(labor.unskilled_day_usd ?? "-")}</b>/day · 숙련 <b>$${esc(labor.skilled_day_usd ?? "-")}</b>/day
-    </div>
-  `;
+  const matRows = (d.materials || []).map((r) => `
+    <tr>
+      <td>${esc(r.item)}</td>
+      <td class="right">${
+        typeof r.price === "number"
+          ? r.price.toLocaleString(undefined, { maximumFractionDigits: 3 })
+          : esc(r.price)
+      }</td>
+      <td>${esc(r.unit)}</td>
+    </tr>
+  `).join("");
 
   const materialsTable = `
-    <div class="muted">자재비 업데이트: ${esc(updated)}</div>
+    <div class="muted">업데이트: ${esc(updated)}</div>
     <table class="table">
       <thead>
-        <tr><th>품목</th><th class="right">가격</th><th>단위</th><th>기준일</th></tr>
+        <tr><th>품목</th><th class="right">가격</th><th>단위</th></tr>
       </thead>
-      <tbody>${matRows || `<tr><td colspan="4">데이터 없음</td></tr>`}</tbody>
+      <tbody>${matRows || `<tr><td colspan="3">데이터 없음</td></tr>`}</tbody>
     </table>
-    ${laborBlock}
   `;
 
   // 비작업일수
@@ -252,9 +239,15 @@ function renderPanel(isoRaw, fallbackName) {
     <table class="table">
       <thead>
         <tr>
-          <th>월</th><th class="right">평균기온</th><th class="right">평균최고/최저</th>
-          <th class="right">${thirdColName}</th><th class="right">주말</th><th class="right">공휴일(평일)</th>
-          <th class="right">확정 비작업일</th><th class="right">등가 비작업일(8h)</th><th>비고</th>
+          <th>월</th>
+          <th class="right">평균기온</th>
+          <th class="right">평균최고/최저</th>
+          <th class="right">${thirdColName}</th>
+          <th class="right">주말</th>
+          <th class="right">공휴일(평일)</th>
+          <th class="right">확정 비작업일</th>
+          <th class="right">등가 비작업일(8h)</th>
+          <th>비고</th>
         </tr>
       </thead>
       <tbody>
@@ -277,7 +270,7 @@ function renderPanel(isoRaw, fallbackName) {
     </table>
   `;
 
-  // PPP 링크(제도/현황)
+  // PPP 링크
   const lawUrl = d.ppp?.lawUrl;
   const statusUrl = d.ppp?.statusUrl;
 
@@ -290,23 +283,22 @@ function renderPanel(isoRaw, fallbackName) {
     </div>
   `;
 
-  const body = view === "nonwork" ? nonWorkTable : materialsTable;
+  const body = (view === "nonwork") ? nonWorkTable : materialsTable;
   setInfo(title, tabs + body + pppBlock);
 }
 
 // ===== Init =====
 async function init() {
-  // 기본 안내 먼저
-  showDefault();
+  // 초기 안내
+  setInfo("국가를 선택하세요", `<div class="muted">지도를 클릭하면 아래에 정보가 표시됩니다.</div>`);
 
-  // 1) countryData 로드 (실패해도 진행)
+  // 1) countryData 로드(실패해도 지도는 뜨게)
   try {
     const { json } = await fetchJsonFirstOk(DATA_URLS, "countryData.json");
     countryData = json || {};
-  } catch {
+  } catch (e) {
     countryData = {};
-    // 실패해도 화면 문구는 간결하게 유지
-    showDefault();
+    // 실패해도 “국가를 선택하세요”는 유지 (조용히)
   }
 
   // 2) 지도 생성
@@ -340,7 +332,7 @@ async function init() {
         paint: { "line-color": "#6b7280", "line-width": 1, "line-opacity": 0.45 },
       });
 
-      // ✅ 선택 음영 (fid 기준)
+      // 선택 음영
       map.addLayer({
         id: "countries-selected",
         type: "fill",
@@ -357,9 +349,6 @@ async function init() {
         filter: ["==", 1, 0],
       });
 
-      // ✅ 안내는 항상 간결하게
-      showDefault();
-
       map.on("mouseenter", "countries-fill", () => (map.getCanvas().style.cursor = "pointer"));
       map.on("mouseleave", "countries-fill", () => (map.getCanvas().style.cursor = ""));
 
@@ -369,25 +358,24 @@ async function init() {
 
         const props = f.properties || {};
         const fid = props.__fid;
-        const isoRaw = props.__iso || "UNK";
-        const name = props.__name || getName(props);
+        const isoRaw = props.__iso || getISOFromProps(props) || "UNK";
+        const name = props.__name || getName(props) || "국가";
 
         selectedFID = fid;
-        selectedIsoRaw = isoRaw;
         selectedName = name;
 
         highlightFID(fid);
 
         if (f.geometry) {
           const bbox = computeBbox(f.geometry);
-          map.fitBounds(bbox, { padding: 60, duration: 700 });
+          if (isFinite(bbox?.[0]?.[0])) map.fitBounds(bbox, { padding: 60, duration: 700 });
         }
 
         view = "materials";
         renderPanel(isoRaw, name);
       });
     } catch (e) {
-      setInfo("오류", `<div class="muted">${esc(e.message || e)}</div>`);
+      setInfo("오류", `<div class="muted">지도 데이터를 불러오지 못했습니다.</div>`);
     }
   });
 
@@ -402,32 +390,29 @@ async function init() {
       const props = ft.properties || {};
       const isoRaw = props.__iso || "UNK";
       const name = props.__name || getName(props);
-
       const isoGood = (isIso3(isoRaw) && isoRaw !== "UNK") ? isoRaw : null;
       const dataName = isoGood ? countryData?.[isoGood]?.name_ko : "";
-
       return norm(name).includes(qn) || norm(isoRaw).includes(qn) || norm(dataName).includes(qn);
     });
 
     if (!f) {
-      setInfo("검색 결과 없음", `<div class="muted">해당 국가를 찾지 못했습니다.</div>`);
+      setInfo("국가를 선택하세요", `<div class="muted">검색 결과가 없습니다.</div>`);
       return;
     }
 
     const props = f.properties || {};
     const fid = props.__fid;
     const isoRaw = props.__iso || "UNK";
-    const name = props.__name || getName(props);
+    const name = props.__name || getName(props) || "국가";
 
     selectedFID = fid;
-    selectedIsoRaw = isoRaw;
     selectedName = name;
 
     highlightFID(fid);
 
     if (f.geometry) {
       const bbox = computeBbox(f.geometry);
-      map.fitBounds(bbox, { padding: 60, duration: 700 });
+      if (isFinite(bbox?.[0]?.[0])) map.fitBounds(bbox, { padding: 60, duration: 700 });
     }
 
     view = "materials";
@@ -435,9 +420,7 @@ async function init() {
   };
 
   searchBtn.addEventListener("click", doSearch);
-  searchInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") doSearch();
-  });
+  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
 
   clearBtn.addEventListener("click", () => {
     searchInput.value = "";
@@ -445,26 +428,25 @@ async function init() {
     selectedIsoRaw = "UNK";
     selectedFID = null;
     selectedName = null;
-    showDefault();
+    setInfo("국가를 선택하세요", `<div class="muted">지도를 클릭하면 아래에 정보가 표시됩니다.</div>`);
     highlightFID(null);
   });
 
   advancedBtn.addEventListener("click", () => {
-    alert("상세검색은 시연용입니다.");
+    alert("상세검색은 시연용으로 추후 확장하면 됩니다.");
   });
 
   // info 영역 탭 클릭
   document.getElementById("info").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-view]");
     if (!btn) return;
-
     view = btn.dataset.view;
 
-    // ✅ 마지막 선택 국가로 다시 렌더 (ISO 없어도 isoRaw 기준으로)
-    if (!selectedName) return;
-    renderPanel(selectedIsoRaw, selectedName);
+    // 마지막 선택 국가 기준으로 다시 렌더
+    renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
   });
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
 
