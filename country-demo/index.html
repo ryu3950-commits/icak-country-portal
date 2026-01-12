@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>해외건설 국가</title>
+
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+</head>
+
+<body>
+  <div class="app">
+    <!-- LEFT TOOLBAR -->
+    <aside class="sidebar">
+      <div class="menu" id="menu">
+        <button class="menu-item active" data-section="전체 지역">
+          <span>지역별</span>
+          <span class="plus">+</span>
+        </button>
+
+        <button class="menu-item" data-section="공종별">
+          <span>공종별</span>
+          <span class="plus">+</span>
+        </button>
+
+        <button class="menu-item" data-section="인프라협력센터">
+          <span>인프라협력센터</span>
+          <span class="plus">+</span>
+        </button>
+
+        <button class="menu-item" data-section="PPP">
+          <span>PPP</span>
+          <span class="plus">+</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <!-- LOGO ONLY -->
+      <header class="page-header">
+        <div class="brandbar">
+          <img class="brand-logo" src="./assets/icak.png" alt="해외건설협회" />
+        </div>
+        <div class="divider"></div>
+      </header>
+
+      <!-- SEARCH BAR AREA -->
+      <section class="search-wrap">
+        <div class="search-box">
+          <input id="searchInput" type="text" placeholder="검색 키워드를 입력해주세요." />
+          <button id="clearBtn" class="icon-btn" title="지우기" aria-label="지우기">×</button>
+          <button id="searchBtn" class="icon-btn" title="검색" aria-label="검색">🔍</button>
+        </div>
+
+        <button id="advancedBtn" class="advanced-btn">
+          상세검색 <span class="plus">+</span>
+        </button>
+      </section>
+
+      <!-- MAP -->
+      <section class="map-wrap">
+        <div id="map"></div>
+      </section>
+
+      <!-- INFO -->
+      <section class="info" id="info">
+        <div class="info-title" id="infoTitle">안내</div>
+        <div class="info-body" id="infoBody">
+          국가를 클릭하거나 검색하면 예시 데이터가 표시됩니다.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
