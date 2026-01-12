@@ -374,11 +374,7 @@ async function init() {
       });
 
       const features = countriesGeo?.features || [];
-      setInfo(
-        "안내",
-        `국가 경계 로드 성공: <b>${features.length.toLocaleString()}</b>개 · <b>${esc(url)}</b><br/>
-         국가를 클릭하면 음영 표시 + 아래 패널이 갱신됩니다. (UAE/베트남은 데이터 표시)`
-      );
+
 
       map.on("mouseenter", "countries-fill", () => (map.getCanvas().style.cursor = "pointer"));
       map.on("mouseleave", "countries-fill", () => (map.getCanvas().style.cursor = ""));
@@ -494,5 +490,6 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
 
 
