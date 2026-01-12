@@ -7,9 +7,9 @@ const GEOJSON_URLS = [
 ];
 
 const DATA_URLS = [
-  "./data/countryData.json",
   "./data/countrydata.json",
-  "./country-demo/data/countryData.json",
+  "./data/countrydata.json",
+  "./country-demo/data/countrydata.json",
   "./country-demo/data/countrydata.json",
   "./docs/data/countryData.json",
   "./docs/data/countrydata.json",
@@ -391,3 +391,4 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
