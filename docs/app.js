@@ -40,68 +40,6 @@ let selectedName = null;    // 표시용 국가명
 let view = "materials";     // materials | nonwork
 
 // ---- helpers ----
-function csvEscape(v){
-  const s = String(v ?? "");
-  return /[,"\n\r]/.test(s) ? `"${s.replaceAll('"','""')}"` : s;
-}
-function rowsToCSV(headers, rows){
-  const head = headers.map(csvEscape).join(",");
-  const body = rows.map(r => r.map(csvEscape).join(",")).join("\n");
-  return "\ufeff" + head + "\n" + body; // Excel BOM
-}
-function downloadCSV(filename, csvText){
-  const blob = new Blob([csvText], { type:"text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function exportMaterialsAndNonworkCSV(){
-  if (!selectedISO){
-    alert("먼저 국가를 선택하세요.");
-    return;
-  }
-  const d = countryData?.[selectedISO];
-  if (!d){
-    alert(`데이터 없음: ${selectedISO}`);
-    return;
-  }
-
-  // 1) 자재비 CSV
-  const matHeaders = ["품목","가격","단위","기준일","출처"];
-  const matRows = (d.materials || []).map(x => [x.item, x.price, x.unit, x.asOf || "", x.source || ""]);
-  const matCSV = rowsToCSV(matHeaders, matRows);
-
-  // 2) 비작업일수 CSV
-  const arr = d.nonWorkDays || [];
-  if (!arr.length){
-    downloadCSV(`${selectedISO}_자재비.csv`, matCSV);
-    alert("비작업일수 데이터가 없습니다. 자재비만 다운로드합니다.");
-    return;
-  }
-
-  const isUAE = d.nonWorkSchema === "UAE" || (arr[0].storm !== undefined);
-
-  const nwHeaders = isUAE
-    ? ["월","평균기온(°C)","평균최고/최저(°C)","모래폭풍(회/월)","주말(토+일)","공휴일(평일)","확정 비작업일","등가 비작업일(8h)","비고"]
-    : ["월","평균기온(°C)","평균최고/최저(°C)","강우일(일/월,>=1mm)","주말(토+일)","공휴일(평일)","확정 비작업일","등가 비작업일(8h)","비고"];
-
-  const nwRows = arr.map(x => isUAE
-    ? [x.month, x.avgTemp, x.avgHighLow, x.storm, x.weekend, x.holidayWeekday, x.fixedOff, x.eqOff8h, x.note]
-    : [x.month, x.avgTemp, x.avgHighLow, x.rainDays, x.weekend, x.holidayWeekday, x.fixedOff, x.eqOff8h, x.note]
-  );
-  const nwCSV = rowsToCSV(nwHeaders, nwRows);
-
-  // ✅ 2개 파일 연속 다운로드(브라우저가 막으면 사이트 설정에서 다중 다운로드 허용)
-  downloadCSV(`${selectedISO}_자재비.csv`, matCSV);
-  setTimeout(() => downloadCSV(`${selectedISO}_비작업일수.csv`, nwCSV), 250);
-}
-
 const isIso3 = (v) => typeof v === "string" && /^[A-Z]{3}$/.test(v) && v !== "-99";
 const norm = (s) => (s || "").toString().trim().toLowerCase();
 const esc = (s) =>
@@ -246,34 +184,12 @@ function renderPanel(isoRaw, fallbackName) {
   const iso = (isIso3(selectedIsoRaw) && selectedIsoRaw !== "UNK") ? selectedIsoRaw : null;
   selectedISO = iso;
 
- // 탭 UI
-const tabs = `
-  <div style="display:flex; gap:8px; margin:10px 0 6px; align-items:center;">
-    <button data-view="materials"
-      style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;
-             background:${view==="materials" ? "#111827" : "#fff"};
-             color:${view==="materials" ? "#fff" : "#111827"};
-             cursor:pointer;">
-      자재비
-    </button>
-
-    <button data-view="nonwork"
-      style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;
-             background:${view==="nonwork" ? "#111827" : "#fff"};
-             color:${view==="nonwork" ? "#fff" : "#111827"};
-             cursor:pointer;">
-      비작업일수
-    </button>
-
-    <!-- ✅ 비작업일수 옆 CSV 버튼 -->
-    <button data-action="csv"
-      style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;
-             background:#fff;color:#111827;cursor:pointer;">
-      CSV
-    </button>
-  </div>
-`;
-
+  const tabs = `
+    <div style="display:flex; gap:8px; margin:10px 0 6px;">
+      <button data-view="materials" style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;background:${view==="materials"?"#111827":"#fff"};color:${view==="materials"?"#fff":"#111827"};cursor:pointer;">자재비</button>
+      <button data-view="nonwork" style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;background:${view==="nonwork"?"#111827":"#fff"};color:${view==="nonwork"?"#fff":"#111827"};cursor:pointer;">비작업일수</button>
+    </div>
+  `;
 
   // 제목: ARE/VNM은 JSON의 name(한글)만 사용, 그 외는 기존대로
 let title = fallbackName || (isoRaw || "선택 국가");
@@ -532,25 +448,17 @@ async function init() {
   });
 
   // info 영역 탭 클릭
-document.getElementById("info").addEventListener("click", (e) => {
-  // ✅ CSV 버튼
-  const csvBtn = e.target.closest('button[data-action="csv"]');
-  if (csvBtn){
-    exportMaterialsAndNonworkCSV();
-    return;
-  }
+  document.getElementById("info").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-view]");
+    if (!btn) return;
+    view = btn.dataset.view;
 
-  // ✅ 탭 버튼
-  const btn = e.target.closest("button[data-view]");
-  if (!btn) return;
-  view = btn.dataset.view;
-  renderPanel(selectedISO, infoTitle.textContent);
-});
-
+    // 마지막 선택 국가 기준으로 다시 렌더
+    renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
+  });
+}
 
 document.addEventListener("DOMContentLoaded", init);
-
-
 
 
 
