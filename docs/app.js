@@ -1,4 +1,4 @@
-// ✅ app.js (ISO 못 찾아도 클릭/음영 되게 수정 + 데이터/geojson 경로 fallback)
+
 
 const GEOJSON_URLS = [
   "./data/countries.geojson",
@@ -332,7 +332,7 @@ async function init() {
   try {
     const { json, url } = await fetchJsonFirstOk(DATA_URLS, "countryData.json");
     countryData = json || {};
-    setInfo("안내", `데이터 로드 성공: <b>${esc(url)}</b><br/>지도에서 국가를 클릭하거나 검색하세요.`);
+    setInfo("지도에서 국가를 클릭하거나 검색하세요.`);
   } catch (e) {
     countryData = {};
     setInfo(
@@ -516,3 +516,4 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
