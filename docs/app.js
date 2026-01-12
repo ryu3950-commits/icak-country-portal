@@ -444,7 +444,7 @@ async function init() {
   });
 
   advancedBtn.addEventListener("click", () => {
-    alert("상세검색은 시연용으로 추후 확장하면 됩니다.");
+    alert(" ");
   });
 
   // info 영역 탭 클릭
@@ -459,6 +459,7 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
 
 
 
