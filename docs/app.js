@@ -191,7 +191,18 @@ function renderPanel(isoRaw, fallbackName) {
     </div>
   `;
 
-  const title = (iso && countryData?.[iso]?.name_ko) || fallbackName || "국가를 선택하세요";
+  // 제목: ARE/VNM은 JSON의 name(한글)만 사용, 그 외는 기존대로
+let title = fallbackName || (isoRaw || "선택 국가");
+
+if (iso && countryData?.[iso]) {
+  if (iso === "ARE" || iso === "VNM") {
+    title = countryData[iso].name; // ✅ 한글로만 (예: "아랍에미리트(UAE)", "베트남(Vietnam)")
+  } else {
+    // 다른 국가는 JSON name이 있으면 그걸 쓰고, 없으면 fallbackName
+    title = countryData[iso].name || title;
+  }
+}
+
 
   // ISO가 없거나(UNK) 데이터가 없으면: 깔끔한 안내만
   if (!iso) {
@@ -448,5 +459,6 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
 
 
