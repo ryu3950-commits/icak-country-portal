@@ -1,4 +1,4 @@
-// app.js (지도 유지 + 비작업일수 옆 CSV Export 추가 버전)
+// app.js (지도 유지 + 비작업일수 키 불일치 해결 + CSV Export 버튼 추가)
 
 const GEOJSON_URLS = [
   "./data/countries.geojson",
@@ -49,6 +49,23 @@ const esc = (s) =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+
+// ✅ 키 불일치 흡수
+function pick(obj, keys, fallback = "") {
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (v !== undefined && v !== null && v !== "") return v; // 0은 정상 표시
+  }
+  return fallback;
+}
+
+// ✅ "평균최고/최저"가 분리돼 있을 때 합쳐주기
+function buildHiLo(obj) {
+  const hi = pick(obj, ["avgHigh", "high", "tMax", "avgMax", "meanMax", "max"]);
+  const lo = pick(obj, ["avgLow", "low", "tMin", "avgMin", "meanMin", "min"]);
+  if (hi !== "" && lo !== "") return `${hi}/${lo}`;
+  return "";
+}
 
 function setInfo(title, html) {
   infoTitle.textContent = title;
@@ -108,8 +125,6 @@ function getISOFromProps(props = {}) {
     const v = props[k];
     if (isIso3(v)) return String(v).toUpperCase();
   }
-
-  // 값 자체 훑기(마지막 방어)
   for (const v of Object.values(props)) {
     if (isIso3(v)) return String(v).toUpperCase();
   }
@@ -123,7 +138,7 @@ function isoFallbackByName(name) {
   return null;
 }
 
-// ✅ __name / __iso / __fid 를 강제로 넣어서 “클릭-하이라이트-검색” 안정화
+// ✅ __name / __iso / __fid 강제 주입
 function preprocessCountriesGeo(geo) {
   const features = geo?.features || [];
   for (let i = 0; i < features.length; i++) {
@@ -132,15 +147,11 @@ function preprocessCountriesGeo(geo) {
 
     const name = getName(f.properties) || "Unknown";
     const iso = getISOFromProps(f.properties) || isoFallbackByName(name) || "UNK";
-
-    // fid(항상 존재)
     const fid = (f.id !== undefined && f.id !== null) ? f.id : i;
 
     f.properties.__name = name;
     f.properties.__iso = iso;
     f.properties.__fid = fid;
-
-    // (선택) feature.id도 넣어두면 디버깅/호환에 도움
     if (f.id === undefined || f.id === null) f.id = fid;
   }
   return geo;
@@ -180,19 +191,18 @@ function highlightFID(fid) {
 
 /* =========================
    CSV Export (자재비 + 비작업일수)
-   - app.js만으로 동작 (index.html 수정 X)
 ========================= */
-function csvEscape(v){
+function csvEscape(v) {
   const s = String(v ?? "");
-  return /[,"\n\r]/.test(s) ? `"${s.replaceAll('"','""')}"` : s;
+  return /[,"\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 }
-function rowsToCSV(headers, rows){
+function rowsToCSV(headers, rows) {
   const head = headers.map(csvEscape).join(",");
   const body = rows.map(r => r.map(csvEscape).join(",")).join("\n");
   return "\ufeff" + head + "\n" + body; // Excel BOM
 }
-function downloadCSV(filename, csvText){
-  const blob = new Blob([csvText], { type:"text/csv;charset=utf-8" });
+function downloadCSV(filename, csvText) {
+  const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -203,58 +213,80 @@ function downloadCSV(filename, csvText){
   URL.revokeObjectURL(url);
 }
 
-function exportMaterialsAndNonworkCSV(){
-  if (!selectedISO){
+function detectDesertSchema(d, arr) {
+  const schema = String(d?.nonWorkSchema || "").toUpperCase();
+  if (schema === "UAE" || schema === "ARE") return true;
+  const r0 = arr?.[0] || {};
+  // storm/sandstorm 있으면 사막형으로 간주
+  if (r0.storm !== undefined || r0.sandstorm !== undefined || r0.shamal !== undefined) return true;
+  return false;
+}
+
+function exportMaterialsAndNonworkCSV() {
+  if (!selectedISO) {
     alert("먼저 국가를 선택하세요.");
     return;
   }
   const d = countryData?.[selectedISO];
-  if (!d){
-    alert(`데이터가 없습니다: ${selectedISO}`);
+  if (!d) {
+    alert(`데이터 없음: ${selectedISO}`);
     return;
   }
 
-  // 1) 자재비 CSV
-  const matHeaders = ["품목","가격","단위","업데이트"];
+  // 1) 자재비
+  const matHeaders = ["품목", "가격", "단위"];
   const matRows = (d.materials || []).map(x => [
-    x.item ?? "",
-    x.price ?? "",
-    x.unit ?? "",
-    d.materialsUpdated || d.updated || ""
+    pick(x, ["item", "name", "material"], ""),
+    pick(x, ["price", "value"], ""),
+    pick(x, ["unit"], "")
   ]);
-  const matCSV = rowsToCSV(matHeaders, matRows);
+  downloadCSV(`${selectedISO}_자재비.csv`, rowsToCSV(matHeaders, matRows));
 
-  // 2) 비작업일수 CSV
-  const nwd = d.nonWorkDays || [];
-  if (!nwd.length){
-    downloadCSV(`${selectedISO}_자재비.csv`, matCSV);
-    alert("비작업일수 데이터가 없어 자재비만 다운로드합니다.");
+  // 2) 비작업일수
+  const arr = d.nonWorkDays || [];
+  if (!arr.length) {
+    alert("비작업일수 데이터가 없어서 자재비만 다운로드했습니다.");
     return;
   }
 
-  const isUAE = d.nonWorkSchema === "UAE"; // 네 렌더 기준 그대로
-  const nwHeaders = isUAE
-    ? ["월","평균기온(°C)","평균최고/최저(°C)","모래폭풍(회/월)","주말(토+일)","공휴일(평일)","확정 비작업일","등가 비작업일(8h)","비고"]
-    : ["월","평균기온(°C)","평균최고/최저(°C)","강우일(일/월,>=1mm)","주말(토+일)","공휴일(평일)","확정 비작업일","등가 비작업일(8h)","비고"];
+  const isDesert = detectDesertSchema(d, arr);
+  const third = isDesert ? "모래폭풍(회/월)" : "강우일(일/월,>=1mm)";
 
-  // ✅ renderPanel에서 쓰는 키 이름과 동일하게 뽑음(avgTemp/avgHiLo/sandstorm/rainDays/...)
-  const nwRows = nwd.map(r => ([
-    r.month ?? "",
-    r.avgTemp ?? "",
-    r.avgHiLo ?? "",
-    isUAE ? (r.sandstorm ?? "") : (r.rainDays ?? ""),
-    r.weekend ?? "",
-    r.holidayWeekday ?? "",
-    r.confirmedOff ?? "",
-    r.equivOff8h ?? "",
-    r.note ?? ""
-  ]));
+  const nwHeaders = ["월","평균기온","평균최고/최저", third, "주말", "공휴일(평일)", "확정 비작업일", "등가 비작업일(8h)", "비고"];
 
-  const nwCSV = rowsToCSV(nwHeaders, nwRows);
+  const nwRows = arr.map(r => {
+    const month = pick(r, ["month", "m", "mon"], "");
+    const avgTemp = pick(r, ["avgTemp", "tAvg", "avg_temperature"], "");
+    const hiLo = pick(r, ["avgHiLo", "avgHighLow", "avgHighLowC", "avgHighLowStr"], "") || buildHiLo(r);
 
-  // ✅ 2개 파일 연속 다운로드(브라우저가 막으면 “다중 다운로드 허용” 설정 필요할 수 있음)
-  downloadCSV(`${selectedISO}_자재비.csv`, matCSV);
-  setTimeout(() => downloadCSV(`${selectedISO}_비작업일수.csv`, nwCSV), 250);
+    const storm = pick(r, ["sandstorm", "storm", "dustStorm", "shamal"], "");
+    const rainDays = pick(r, ["rainDays", "rain_day", "rainyDays"], "");
+
+    const weekend = pick(r, ["weekend", "weekendDays"], "");
+    const holiday = pick(r, ["holidayWeekday", "holiday", "holidayWeekdays"], "");
+
+    // ✅ 여기 때문에 베트남만 비던 케이스를 잡아줌
+    const confirmed = pick(r, ["confirmedOff", "fixedOff", "fixedOffDays", "confirmedNonwork"], "");
+    const equiv = pick(r, ["equivOff8h", "eqOff8h", "eqOff", "equivalentOff8h"], "");
+
+    const note = pick(r, ["note", "remark", "remarks"], "");
+
+    return [
+      month,
+      avgTemp,
+      hiLo,
+      isDesert ? storm : rainDays,
+      weekend,
+      holiday,
+      confirmed,
+      equiv,
+      note
+    ];
+  });
+
+  setTimeout(() => {
+    downloadCSV(`${selectedISO}_비작업일수.csv`, rowsToCSV(nwHeaders, nwRows));
+  }, 250);
 }
 
 // ===== 패널 렌더 =====
@@ -263,40 +295,22 @@ function renderPanel(isoRaw, fallbackName) {
   const iso = (isIso3(selectedIsoRaw) && selectedIsoRaw !== "UNK") ? selectedIsoRaw : null;
   selectedISO = iso;
 
-  // ✅ 탭 + CSV 버튼 (비작업일수 옆)
+  // ✅ 탭 + CSV 버튼(비작업일수 옆)
   const tabs = `
-    <div style="display:flex; gap:8px; margin:10px 0 6px; align-items:center; flex-wrap:wrap;">
-      <button data-view="materials"
-        style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;
-               background:${view==="materials"?"#111827":"#fff"};
-               color:${view==="materials"?"#fff":"#111827"};
-               cursor:pointer;">자재비</button>
-
-      <button data-view="nonwork"
-        style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;
-               background:${view==="nonwork"?"#111827":"#fff"};
-               color:${view==="nonwork"?"#fff":"#111827"};
-               cursor:pointer;">비작업일수</button>
-
-      <button data-action="csv"
-        style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;background:#fff;color:#111827;cursor:pointer;">
-        CSV
-      </button>
+    <div style="display:flex; gap:8px; margin:10px 0 6px; align-items:center;">
+      <button data-view="materials" style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="materials"?"#111827":"#fff"};color:${view==="materials"?"#fff":"#111827"};cursor:pointer;">자재비</button>
+      <button data-view="nonwork" style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="nonwork"?"#111827":"#fff"};color:${view==="nonwork"?"#fff":"#111827"};cursor:pointer;">비작업일수</button>
+      <button data-action="csv" style="padding:8px 12px;border:1px solid #ddd;border-radius:14px;background:#fff;color:#111827;cursor:pointer;">CSV</button>
     </div>
   `;
 
-  // 제목: ARE/VNM은 JSON의 name(한글)만 사용, 그 외는 기존대로
+  // 제목
   let title = fallbackName || (isoRaw || "선택 국가");
-
   if (iso && countryData?.[iso]) {
-    if (iso === "ARE" || iso === "VNM") {
-      title = countryData[iso].name;
-    } else {
-      title = countryData[iso].name || title;
-    }
+    if (iso === "ARE" || iso === "VNM") title = countryData[iso].name;
+    else title = countryData[iso].name || title;
   }
 
-  // ISO가 없거나(UNK) 데이터가 없으면: 안내
   if (!iso) {
     setInfo(title, tabs + `<div class="muted">이 국가의 상세 데이터가 없습니다.</div>`);
     return;
@@ -313,13 +327,13 @@ function renderPanel(isoRaw, fallbackName) {
   // 자재비 테이블
   const matRows = (d.materials || []).map((r) => `
     <tr>
-      <td>${esc(r.item)}</td>
+      <td>${esc(pick(r, ["item", "name", "material"], ""))}</td>
       <td class="right">${
         typeof r.price === "number"
           ? r.price.toLocaleString(undefined, { maximumFractionDigits: 3 })
-          : esc(r.price)
+          : esc(pick(r, ["price", "value"], ""))
       }</td>
-      <td>${esc(r.unit)}</td>
+      <td>${esc(pick(r, ["unit"], ""))}</td>
     </tr>
   `).join("");
 
@@ -333,10 +347,10 @@ function renderPanel(isoRaw, fallbackName) {
     </table>
   `;
 
-  // 비작업일수
+  // 비작업일수 (✅ 키 불일치 자동 대응)
   const nwd = d.nonWorkDays || [];
-  const isUAE = d.nonWorkSchema === "UAE";
-  const thirdColName = isUAE ? "모래폭풍(회/월)" : "강우일(일/월,>=1mm)";
+  const isDesert = detectDesertSchema(d, nwd);
+  const thirdColName = isDesert ? "모래폭풍(회/월)" : "강우일(일/월,>=1mm)";
 
   const nonWorkTable = `
     <table class="table">
@@ -355,19 +369,37 @@ function renderPanel(isoRaw, fallbackName) {
       </thead>
       <tbody>
         ${
-          nwd.map((r) => `
-            <tr>
-              <td>${esc(r.month)}</td>
-              <td class="right">${esc(r.avgTemp)}</td>
-              <td class="right">${esc(r.avgHiLo)}</td>
-              <td class="right">${esc(isUAE ? r.sandstorm : r.rainDays)}</td>
-              <td class="right">${esc(r.weekend)}</td>
-              <td class="right">${esc(r.holidayWeekday)}</td>
-              <td class="right">${esc(r.confirmedOff)}</td>
-              <td class="right">${esc(r.equivOff8h)}</td>
-              <td>${esc(r.note)}</td>
-            </tr>
-          `).join("") || `<tr><td colspan="9">데이터 없음</td></tr>`
+          nwd.map((r) => {
+            const month = pick(r, ["month", "m", "mon"], "");
+            const avgTemp = pick(r, ["avgTemp", "tAvg"], "");
+            const hiLo = pick(r, ["avgHiLo", "avgHighLow", "avgHighLowC", "avgHighLowStr"], "") || buildHiLo(r);
+
+            const storm = pick(r, ["sandstorm", "storm", "dustStorm", "shamal"], "");
+            const rain = pick(r, ["rainDays", "rain_day", "rainyDays"], "");
+
+            const weekend = pick(r, ["weekend", "weekendDays"], "");
+            const holiday = pick(r, ["holidayWeekday", "holiday", "holidayWeekdays"], "");
+
+            // ✅ 베트남/국가별 키 불일치 흡수
+            const confirmed = pick(r, ["confirmedOff", "fixedOff", "fixedOffDays", "confirmedNonwork"], "");
+            const equiv = pick(r, ["equivOff8h", "eqOff8h", "eqOff", "equivalentOff8h"], "");
+
+            const note = pick(r, ["note", "remark", "remarks"], "");
+
+            return `
+              <tr>
+                <td>${esc(month)}</td>
+                <td class="right">${esc(avgTemp)}</td>
+                <td class="right">${esc(hiLo)}</td>
+                <td class="right">${esc(isDesert ? storm : rain)}</td>
+                <td class="right">${esc(weekend)}</td>
+                <td class="right">${esc(holiday)}</td>
+                <td class="right">${esc(confirmed)}</td>
+                <td class="right">${esc(equiv)}</td>
+                <td>${esc(note)}</td>
+              </tr>
+            `;
+          }).join("") || `<tr><td colspan="9">데이터 없음</td></tr>`
         }
       </tbody>
     </table>
@@ -392,10 +424,9 @@ function renderPanel(isoRaw, fallbackName) {
 
 // ===== Init =====
 async function init() {
-  // 초기 안내
   setInfo("국가를 선택하세요", `<div class="muted">지도를 클릭하면 아래에 정보가 표시됩니다.</div>`);
 
-  // 1) countryData 로드(실패해도 지도는 뜨게)
+  // countryData 로드(실패해도 지도는 뜨게)
   try {
     const { json } = await fetchJsonFirstOk(DATA_URLS, "countryData.json");
     countryData = json || {};
@@ -403,7 +434,7 @@ async function init() {
     countryData = {};
   }
 
-  // 2) 지도 생성
+  // 지도 생성
   map = new maplibregl.Map({
     container: "map",
     style: MAP_STYLE,
@@ -413,7 +444,6 @@ async function init() {
   map.addControl(new maplibregl.NavigationControl(), "top-right");
 
   map.on("load", async () => {
-    // 3) GeoJSON 로드
     try {
       const { json } = await fetchJsonFirstOk(GEOJSON_URLS, "countries.geojson");
       countriesGeo = preprocessCountriesGeo(json);
@@ -538,21 +568,18 @@ async function init() {
     alert(" ");
   });
 
-  // info 영역 탭/CSV 클릭 (✅ 여기서 CSV 먼저 처리!)
+  // ✅ info 영역: 탭 + CSV 버튼 이벤트(이벤트 위임)
   document.getElementById("info").addEventListener("click", (e) => {
-    // CSV 버튼
     const csvBtn = e.target.closest('button[data-action="csv"]');
-    if (csvBtn){
+    if (csvBtn) {
       exportMaterialsAndNonworkCSV();
       return;
     }
 
-    // 탭 버튼
     const btn = e.target.closest("button[data-view]");
     if (!btn) return;
     view = btn.dataset.view;
 
-    // 마지막 선택 국가 기준으로 다시 렌더
     renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
   });
 }
