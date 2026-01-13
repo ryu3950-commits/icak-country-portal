@@ -1,6 +1,8 @@
 // app.js (Full)
-// - "이 국가의 상세데이터가 없습니다." 해결: ISO 공백/개행/소문자 정규화 + countryData 로드 로그
-// - CSV Export + 공사비 분석 버튼 유지
+// ✅ "이 국가의 상세데이터가 없습니다." 해결(파일명/경로 대소문자 문제 해결):
+//    - DATA_URLS에서 countryData.json(대문자 D) 전부 제거 → countrydata.json(소문자)로 통일
+// ✅ ISO 공백/개행/소문자 정규화 유지
+// ✅ CSV Export + 공사비 분석 버튼 유지
 
 const GEOJSON_URLS = [
   "./data/countries.geojson",
@@ -9,14 +11,11 @@ const GEOJSON_URLS = [
   "./countries.geojson",
 ];
 
+// ✅ 여기서 "Data" → "data" (파일명도 countrydata.json으로 통일)
 const DATA_URLS = [
-  "./data/countryData.json",
   "./data/countrydata.json",
-  "./country-demo/data/countryData.json",
   "./country-demo/data/countrydata.json",
-  "./docs/data/countryData.json",
   "./docs/data/countrydata.json",
-  "./countryData.json",
   "./countrydata.json",
 ];
 
@@ -66,7 +65,7 @@ const esc = (s) =>
 function pick(obj, keys, fallback = "") {
   for (const k of keys) {
     const v = obj?.[k];
-    if (v !== undefined && v !== null && v !== "") return v;
+    if (v !== undefined && v !== null && v !== "") return v; // 0은 정상 표시
   }
   return fallback;
 }
@@ -176,8 +175,10 @@ function computeBbox(geometry) {
 
   const visit = (c) => {
     const [x, y] = c;
-    minX = Math.min(minX, x); minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
   };
 
   const walk = (arr) => {
@@ -212,8 +213,8 @@ function csvEscape(v) {
 }
 function rowsToCSV(headers, rows) {
   const head = headers.map(csvEscape).join(",");
-  const body = rows.map(r => r.map(csvEscape).join(",")).join("\n");
-  return "\ufeff" + head + "\n" + body;
+  const body = rows.map((r) => r.map(csvEscape).join(",")).join("\n");
+  return "\ufeff" + head + "\n" + body; // Excel BOM
 }
 function downloadCSV(filename, csvText) {
   const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
@@ -231,6 +232,7 @@ function detectDesertSchema(d, arr) {
   const schema = String(d?.nonWorkSchema || "").toUpperCase();
   if (schema === "UAE" || schema === "ARE") return true;
   const r0 = arr?.[0] || {};
+  // storm/sandstorm 있으면 사막형으로 간주
   if (r0.storm !== undefined || r0.sandstorm !== undefined || r0.shamal !== undefined) return true;
   return false;
 }
@@ -246,14 +248,16 @@ function exportMaterialsAndNonworkCSV() {
     return;
   }
 
+  // 1) 자재비
   const matHeaders = ["품목", "가격", "단위"];
-  const matRows = (d.materials || []).map(x => [
+  const matRows = (d.materials || []).map((x) => [
     pick(x, ["item", "name", "material"], ""),
     pick(x, ["price", "value"], ""),
-    pick(x, ["unit"], "")
+    pick(x, ["unit"], ""),
   ]);
   downloadCSV(`${selectedISO}_자재비.csv`, rowsToCSV(matHeaders, matRows));
 
+  // 2) 비작업일수
   const arr = d.nonWorkDays || [];
   if (!arr.length) {
     alert("비작업일수 데이터가 없어서 자재비만 다운로드했습니다.");
@@ -263,9 +267,19 @@ function exportMaterialsAndNonworkCSV() {
   const isDesert = detectDesertSchema(d, arr);
   const third = isDesert ? "모래폭풍(회/월)" : "강우일(일/월,>=1mm)";
 
-  const nwHeaders = ["월","평균기온","평균최고/최저", third, "주말", "공휴일(평일)", "확정 비작업일", "등가 비작업일(8h)", "비고"];
+  const nwHeaders = [
+    "월",
+    "평균기온",
+    "평균최고/최저",
+    third,
+    "주말",
+    "공휴일(평일)",
+    "확정 비작업일",
+    "등가 비작업일(8h)",
+    "비고",
+  ];
 
-  const nwRows = arr.map(r => {
+  const nwRows = arr.map((r) => {
     const month = pick(r, ["month", "m", "mon"], "");
     const avgTemp = pick(r, ["avgTemp", "tAvg", "avg_temperature"], "");
     const hiLo = pick(r, ["avgHiLo", "avgHighLow", "avgHighLowC", "avgHighLowStr"], "") || buildHiLo(r);
@@ -281,17 +295,7 @@ function exportMaterialsAndNonworkCSV() {
 
     const note = pick(r, ["note", "remark", "remarks"], "");
 
-    return [
-      month,
-      avgTemp,
-      hiLo,
-      isDesert ? storm : rainDays,
-      weekend,
-      holiday,
-      confirmed,
-      equiv,
-      note
-    ];
+    return [month, avgTemp, hiLo, isDesert ? storm : rainDays, weekend, holiday, confirmed, equiv, note];
   });
 
   setTimeout(() => {
@@ -315,7 +319,7 @@ function getDefaultCostPeriod(iso) {
 
 function getCostRow(iso, period) {
   const series = getCostSeries(iso);
-  return series.find(x => String(x.period) === String(period)) || null;
+  return series.find((x) => String(x.period) === String(period)) || null;
 }
 
 function fmtMoney(n) {
@@ -391,15 +395,15 @@ function updateCostResult() {
 // ===== 패널 렌더 =====
 function renderPanel(isoRaw, fallbackName) {
   selectedIsoRaw = (isoRaw ?? "UNK").toString().trim().toUpperCase();
-  const iso = (isIso3(selectedIsoRaw) && selectedIsoRaw !== "UNK") ? selectedIsoRaw : null;
+  const iso = isIso3(selectedIsoRaw) && selectedIsoRaw !== "UNK" ? selectedIsoRaw : null;
   selectedISO = iso;
 
   const tabs = `
     <div style="display:flex; gap:8px; margin:10px 0 6px; align-items:center; flex-wrap:wrap;">
-      <button data-view="materials" style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="materials"?"#111827":"#fff"};color:${view==="materials"?"#fff":"#111827"};cursor:pointer;">자재비</button>
-      <button data-view="nonwork" style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="nonwork"?"#111827":"#fff"};color:${view==="nonwork"?"#fff":"#111827"};cursor:pointer;">비작업일수</button>
+      <button data-view="materials" style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view === "materials" ? "#111827" : "#fff"};color:${view === "materials" ? "#fff" : "#111827"};cursor:pointer;">자재비</button>
+      <button data-view="nonwork" style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view === "nonwork" ? "#111827" : "#fff"};color:${view === "nonwork" ? "#fff" : "#111827"};cursor:pointer;">비작업일수</button>
       <button data-action="csv" style="padding:8px 12px;border:1px solid #ddd;border-radius:14px;background:#fff;color:#111827;cursor:pointer;">CSV</button>
-      <button data-action="cost" style="padding:8px 12px;border:1px solid #ddd;border-radius:14px;background:${view==="cost"?"#111827":"#fff"};color:${view==="cost"?"#fff":"#111827"};cursor:pointer;">공사비 분석</button>
+      <button data-action="cost" style="padding:8px 12px;border:1px solid #ddd;border-radius:14px;background:${view === "cost" ? "#111827" : "#fff"};color:${view === "cost" ? "#fff" : "#111827"};cursor:pointer;">공사비 분석</button>
     </div>
   `;
 
@@ -419,7 +423,9 @@ function renderPanel(isoRaw, fallbackName) {
 
   const updated = d.materialsUpdated || d.updated || "—";
 
-  const matRows = (d.materials || []).map((r) => `
+  const matRows = (d.materials || [])
+    .map(
+      (r) => `
     <tr>
       <td>${esc(pick(r, ["item", "name", "material"], ""))}</td>
       <td class="right">${
@@ -429,7 +435,9 @@ function renderPanel(isoRaw, fallbackName) {
       }</td>
       <td>${esc(pick(r, ["unit"], ""))}</td>
     </tr>
-  `).join("");
+  `
+    )
+    .join("");
 
   const materialsTable = `
     <div class="muted">업데이트: ${esc(updated)}</div>
@@ -462,36 +470,38 @@ function renderPanel(isoRaw, fallbackName) {
       </thead>
       <tbody>
         ${
-          nwd.map((r) => {
-            const month = pick(r, ["month", "m", "mon"], "");
-            const avgTemp = pick(r, ["avgTemp", "tAvg"], "");
-            const hiLo = pick(r, ["avgHiLo", "avgHighLow", "avgHighLowC", "avgHighLowStr"], "") || buildHiLo(r);
+          nwd
+            .map((r) => {
+              const month = pick(r, ["month", "m", "mon"], "");
+              const avgTemp = pick(r, ["avgTemp", "tAvg"], "");
+              const hiLo = pick(r, ["avgHiLo", "avgHighLow", "avgHighLowC", "avgHighLowStr"], "") || buildHiLo(r);
 
-            const storm = pick(r, ["sandstorm", "storm", "dustStorm", "shamal"], "");
-            const rain = pick(r, ["rainDays", "rain_day", "rainyDays"], "");
+              const storm = pick(r, ["sandstorm", "storm", "dustStorm", "shamal"], "");
+              const rain = pick(r, ["rainDays", "rain_day", "rainyDays"], "");
 
-            const weekend = pick(r, ["weekend", "weekendDays"], "");
-            const holiday = pick(r, ["holidayWeekday", "holiday", "holidayWeekdays"], "");
+              const weekend = pick(r, ["weekend", "weekendDays"], "");
+              const holiday = pick(r, ["holidayWeekday", "holiday", "holidayWeekdays"], "");
 
-            const confirmed = pick(r, ["confirmedOff", "fixedOff", "fixedOffDays", "confirmedNonwork"], "");
-            const equiv = pick(r, ["equivOff8h", "eqOff8h", "eqOff", "equivalentOff8h"], "");
+              const confirmed = pick(r, ["confirmedOff", "fixedOff", "fixedOffDays", "confirmedNonwork"], "");
+              const equiv = pick(r, ["equivOff8h", "eqOff8h", "eqOff", "equivalentOff8h"], "");
 
-            const note = pick(r, ["note", "remark", "remarks"], "");
+              const note = pick(r, ["note", "remark", "remarks"], "");
 
-            return `
-              <tr>
-                <td>${esc(month)}</td>
-                <td class="right">${esc(avgTemp)}</td>
-                <td class="right">${esc(hiLo)}</td>
-                <td class="right">${esc(isDesert ? storm : rain)}</td>
-                <td class="right">${esc(weekend)}</td>
-                <td class="right">${esc(holiday)}</td>
-                <td class="right">${esc(confirmed)}</td>
-                <td class="right">${esc(equiv)}</td>
-                <td>${esc(note)}</td>
-              </tr>
-            `;
-          }).join("") || `<tr><td colspan="9">데이터 없음</td></tr>`
+              return `
+                <tr>
+                  <td>${esc(month)}</td>
+                  <td class="right">${esc(avgTemp)}</td>
+                  <td class="right">${esc(hiLo)}</td>
+                  <td class="right">${esc(isDesert ? storm : rain)}</td>
+                  <td class="right">${esc(weekend)}</td>
+                  <td class="right">${esc(holiday)}</td>
+                  <td class="right">${esc(confirmed)}</td>
+                  <td class="right">${esc(equiv)}</td>
+                  <td>${esc(note)}</td>
+                </tr>
+              `;
+            })
+            .join("") || `<tr><td colspan="9">데이터 없음</td></tr>`
         }
       </tbody>
     </table>
@@ -509,6 +519,7 @@ function renderPanel(isoRaw, fallbackName) {
     </div>
   `;
 
+  // ---- 공사비 분석 UI ----
   const costSeries = getCostSeries(iso);
   if (!costState.period) costState.period = getDefaultCostPeriod(iso);
 
@@ -516,73 +527,74 @@ function renderPanel(isoRaw, fallbackName) {
     <div style="margin-top:8px;">
       ${
         iso !== "ARE"
-          ? `<div class="muted">현재 UAE만 지원합니다.</div>`
-          : `
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
-              <div style="border:1px solid #e5e7eb; border-radius:14px; padding:10px;">
-                <div style="font-weight:700; margin-bottom:6px;">철근</div>
-                <div style="display:flex; gap:8px; align-items:center;">
-                  <input
-                    id="costRebarT"
-                    data-cost-field="rebarT"
-                    type="number"
-                    inputmode="decimal"
-                    min="0"
-                    step="0.1"
-                    placeholder="예: 120"
-                    value="${esc(costState.rebarT)}"
-                    style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
-                  />
-                  <span class="muted">t</span>
+          ? `<div class="muted">공사비 분석은 현재 UAE(ARE)만 지원합니다.</div>`
+          : costSeries.length === 0
+            ? `<div class="muted">공사비 분석 단가 데이터(constructionCost.series)가 아직 없습니다. (countrydata.json에 추가 필요)</div>`
+            : `
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+                <div style="border:1px solid #e5e7eb; border-radius:14px; padding:10px;">
+                  <div style="font-weight:700; margin-bottom:6px;">철근</div>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <input
+                      id="costRebarT"
+                      data-cost-field="rebarT"
+                      type="number"
+                      inputmode="decimal"
+                      min="0"
+                      step="0.1"
+                      placeholder="예: 120"
+                      value="${esc(costState.rebarT)}"
+                      style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
+                    />
+                    <span class="muted">t</span>
+                  </div>
+                </div>
+
+                <div style="border:1px solid #e5e7eb; border-radius:14px; padding:10px;">
+                  <div style="font-weight:700; margin-bottom:6px;">콘크리트</div>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <input
+                      id="costConcreteM3"
+                      data-cost-field="concreteM3"
+                      type="number"
+                      inputmode="decimal"
+                      min="0"
+                      step="1"
+                      placeholder="예: 850"
+                      value="${esc(costState.concreteM3)}"
+                      style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
+                    />
+                    <span class="muted">m³</span>
+                  </div>
                 </div>
               </div>
 
-              <div style="border:1px solid #e5e7eb; border-radius:14px; padding:10px;">
-                <div style="font-weight:700; margin-bottom:6px;">콘크리트</div>
-                <div style="display:flex; gap:8px; align-items:center;">
-                  <input
-                    id="costConcreteM3"
-                    data-cost-field="concreteM3"
-                    type="number"
-                    inputmode="decimal"
-                    min="0"
-                    step="1"
-                    placeholder="예: 850"
-                    value="${esc(costState.concreteM3)}"
-                    style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
-                  />
-                  <span class="muted">m³</span>
-                </div>
+              <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <div style="font-weight:700;">기준 연도/분기</div>
+                <select
+                  id="costPeriod"
+                  data-cost-field="period"
+                  style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;"
+                >
+                  ${
+                    costSeries
+                      .map((r) => {
+                        const p = String(r.period || "");
+                        const sel = p === String(costState.period) ? "selected" : "";
+                        return `<option value="${esc(p)}" ${sel}>${esc(p)}</option>`;
+                      })
+                      .join("")
+                  }
+                </select>
               </div>
-            </div>
 
-            <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-              <div style="font-weight:700;">기준 연도/분기</div>
-              <select
-                id="costPeriod"
-                data-cost-field="period"
-                style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;"
-              >
-                ${
-                  costSeries.map(r => {
-                    const p = String(r.period || "");
-                    const sel = p === String(costState.period) ? "selected" : "";
-                    return `<option value="${esc(p)}" ${sel}>${esc(p)}</option>`;
-                  }).join("")
-                }
-              </select>
-            </div>
-
-            <div id="costResult"></div>
-          `
+              <div id="costResult"></div>
+            `
       }
     </div>
   `;
 
-  const body =
-    (view === "nonwork") ? nonWorkTable :
-    (view === "cost") ? costUI :
-    materialsTable;
+  const body = view === "nonwork" ? nonWorkTable : view === "cost" ? costUI : materialsTable;
 
   setInfo(title, tabs + body + pppBlock);
 
@@ -593,10 +605,10 @@ function renderPanel(isoRaw, fallbackName) {
 async function init() {
   setInfo("국가를 선택하세요", `<div class="muted">지도를 클릭하면 아래에 정보가 표시됩니다.</div>`);
 
-  // countryData 로드 + 로그
+  // ✅ countrydata 로드 + 로그 (라벨도 소문자)
   try {
-    const { json, url } = await fetchJsonFirstOk(DATA_URLS, "countryData.json");
-    countryData = json || {};
+    const { json, url } = await fetchJsonFirstOk(DATA_URLS, "countrydata.json");
+    countryData = json && typeof json === "object" ? json : {};
     console.log("[countryData] loaded:", url, "keys:", Object.keys(countryData));
   } catch (e) {
     countryData = {};
@@ -690,7 +702,7 @@ async function init() {
       const props = ft.properties || {};
       const isoRaw = (props.__iso || "UNK").toString().trim().toUpperCase();
       const name = props.__name || getName(props);
-      const isoGood = (isIso3(isoRaw) && isoRaw !== "UNK") ? isoRaw : null;
+      const isoGood = isIso3(isoRaw) && isoRaw !== "UNK" ? isoRaw : null;
       const dataName = isoGood ? (countryData?.[isoGood]?.name_ko || countryData?.[isoGood]?.name || "") : "";
       return norm(name).includes(qn) || norm(isoRaw).includes(qn) || norm(dataName).includes(qn);
     });
@@ -720,7 +732,9 @@ async function init() {
   };
 
   searchBtn.addEventListener("click", doSearch);
-  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doSearch();
+  });
 
   clearBtn.addEventListener("click", () => {
     searchInput.value = "";
@@ -759,6 +773,7 @@ async function init() {
     renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
   });
 
+  // 공사비 분석 입력 변화 반영
   infoEl.addEventListener("input", (e) => {
     const field = e.target?.getAttribute?.("data-cost-field");
     if (!field) return;
