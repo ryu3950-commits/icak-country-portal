@@ -14,7 +14,7 @@
     <!-- LEFT TOOLBAR -->
     <aside class="sidebar">
       <div class="menu" id="menu">
-        <button class="menu-item active" data-section="전체 지역">
+        <button class="menu-item" data-section="지역별">
           <span>지역별</span>
           <span class="plus">+</span>
         </button>
@@ -31,6 +31,12 @@
 
         <button class="menu-item" data-section="PPP">
           <span>PPP</span>
+          <span class="plus">+</span>
+        </button>
+
+        <!-- ✅ PPP 아래: 공사비 분석 -->
+        <button class="menu-item" data-section="공사비 분석">
+          <span>공사비 분석</span>
           <span class="plus">+</span>
         </button>
       </div>
@@ -64,10 +70,10 @@
         <div id="map"></div>
       </section>
 
-      <!-- INFO (딱 1개만 유지) -->
-      <section class="info" id="info">
-        <div class="info-title" id="infoTitle"></div>
-        <div class="info-body" id="infoBody"></div>
+      <!-- INFO (✅ 하나만 유지) -->
+      <section class="info" id="infoPanel">
+        <h2 id="infoTitle">국가를 선택하세요</h2>
+        <div id="infoBody" class="muted">지도를 클릭하면 아래에 정보가 표시됩니다.</div>
       </section>
     </main>
   </div>
