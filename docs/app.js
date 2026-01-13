@@ -43,6 +43,7 @@ const advancedBtn = document.getElementById("advancedBtn");
 // =========================
 // State
 // =========================
+let countryDataLoadError = null;
 let map;
 let countriesGeo = null;
 let countryData = {};
@@ -113,6 +114,106 @@ function pick(obj, keys, fallback = "") {
 function setInfo(title, html) {
   infoTitle.textContent = title;
   infoBody.innerHTML = html;
+}
+
+// ✅ 비작업일수 12개월 원상복구
+function ensureNonWork12(d, iso) {
+  if (!d) return;
+  if (!Array.isArray(d.nonWorkDays) || d.nonWorkDays.length < 12) {
+    if (iso === "ARE") d.nonWorkDays = DEFAULT_ARE_NONWORK.slice();
+    if (iso === "VNM") d.nonWorkDays = DEFAULT_VNM_NONWORK.slice();
+  }
+}
+
+// ✅ ISO3 정규화(대소문자/공백 대응)
+function toIso3(v) {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(s) ? s : null;
+}
+
+// ✅ countrydata.json wrapper/배열/구버전까지 싹 정규화
+function normalizeCountryData(raw) {
+  // 1) 이미 { ARE:{...}, VNM:{...} }
+  if (raw && (raw.ARE || raw.VNM)) {
+    if (raw.ARE) ensureNonWork12(raw.ARE, "ARE");
+    if (raw.VNM) ensureNonWork12(raw.VNM, "VNM");
+    return raw;
+  }
+
+  // 2) wrapper: { data:{...} } / { countries:{...} } / { countryData:{...} } 등
+  const wrapped =
+    raw?.data ||
+    raw?.countries ||
+    raw?.countryData ||
+    raw?.countrydata ||
+    raw?.items ||
+    null;
+
+  if (wrapped && (wrapped.ARE || wrapped.VNM)) {
+    if (wrapped.ARE) ensureNonWork12(wrapped.ARE, "ARE");
+    if (wrapped.VNM) ensureNonWork12(wrapped.VNM, "VNM");
+    return wrapped;
+  }
+
+  // 3) array: [{iso:"ARE",...}, ...]
+  if (Array.isArray(raw)) {
+    const out = {};
+    for (const it of raw) {
+      const iso = toIso3(it?.iso || it?.ISO || it?.iso3 || it?.ISO3 || it?.code);
+      if (iso) out[iso] = it;
+    }
+    if (out.ARE) ensureNonWork12(out.ARE, "ARE");
+    if (out.VNM) ensureNonWork12(out.VNM, "VNM");
+    return out;
+  }
+
+  // 4) (구버전) constructionCost만 있는 케이스
+  if (raw && raw.constructionCost && raw.constructionCost.series) {
+    return {
+      ARE: {
+        name: "아랍에미리트(UAE)",
+        updated: "",
+        materials: [
+          { key: "rebar", item: "철근", unit: "USD/t" },
+          { key: "concrete", item: "레미콘", unit: "USD/m3" },
+        ],
+        materialsQuarterly: {
+          currency: raw.constructionCost.currency || "USD",
+          units: raw.constructionCost.units || { rebar: "USD/t", concrete: "USD/m3" },
+          series: raw.constructionCost.series.map((r) => ({
+            period: r.period,
+            rebar: r.rebar_usd_per_t,
+            concrete: r.concrete_usd_per_m3,
+          })),
+        },
+        nonWorkDays: DEFAULT_ARE_NONWORK.slice(),
+      },
+    };
+  }
+
+  return raw || {};
+}
+
+// ✅ 어떤 구조든 ISO3 record 1개를 안정적으로 가져오기
+function getCountryRecord(iso) {
+  if (!iso) return null;
+  const key = toIso3(iso);
+  if (!key) return null;
+
+  // direct
+  if (countryData?.[key]) return countryData[key];
+
+  // case-insensitive keys (e.g., "are")
+  for (const k of Object.keys(countryData || {})) {
+    if (toIso3(k) === key) return countryData[k];
+  }
+
+  // nested (혹시 normalize가 못 잡은 wrapper가 남아있다면)
+  const nested = countryData?.data || countryData?.countries || countryData?.countryData;
+  if (nested?.[key]) return nested[key];
+
+  return null;
 }
 
 async function fetchJsonFirstOk(urls, label) {
@@ -222,13 +323,6 @@ function highlightFID(fid) {
 // =========================
 // Data normalization
 // =========================
-function ensureNonWork12(d, iso) {
-  if (!d) return;
-  if (!Array.isArray(d.nonWorkDays) || d.nonWorkDays.length < 12) {
-    if (iso === "ARE") d.nonWorkDays = DEFAULT_ARE_NONWORK.slice();
-    if (iso === "VNM") d.nonWorkDays = DEFAULT_VNM_NONWORK.slice();
-  }
-}
 
 // period list
 function getPeriods(d) {
@@ -241,42 +335,6 @@ function getSeriesRowByPeriod(d, period) {
   const s = d?.materialsQuarterly?.series;
   if (!Array.isArray(s)) return null;
   return s.find(x => x.period === period) || null;
-}
-
-function normalizeCountryData(raw) {
-  // case1) already correct: { ARE:{...}, VNM:{...} }
-  if (raw && (raw.ARE || raw.VNM)) {
-    if (raw.ARE) ensureNonWork12(raw.ARE, "ARE");
-    if (raw.VNM) ensureNonWork12(raw.VNM, "VNM");
-    return raw;
-  }
-
-  // case2) only { constructionCost: ... } 형태로 들어온 경우 (예전 상태)
-  if (raw && raw.constructionCost && raw.constructionCost.series) {
-    return {
-      ARE: {
-        name: "아랍에미리트(UAE)",
-        updated: "",
-        materials: [
-          { key: "rebar", item: "철근", unit: "USD/t" },
-          { key: "concrete", item: "레미콘", unit: "USD/m3" },
-        ],
-        materialsQuarterly: {
-          currency: raw.constructionCost.currency || "USD",
-          units: raw.constructionCost.units || { rebar: "USD/t", concrete: "USD/m3" },
-          series: raw.constructionCost.series.map(r => ({
-            period: r.period,
-            rebar: r.rebar_usd_per_t,
-            concrete: r.concrete_usd_per_m3,
-          })),
-        },
-        nonWorkDays: DEFAULT_ARE_NONWORK.slice(),
-      }
-    };
-  }
-
-  // fallback
-  return raw || {};
 }
 
 // =========================
@@ -397,7 +455,6 @@ function renderCostTable(d) {
 }
 
 function renderMaterialCalc(d) {
-  const row = getSeriesRowByPeriod(d, selectedPeriod) || {};
   const items = Array.isArray(d.materials) ? d.materials : [];
 
   const inputs = items.map(it => {
@@ -450,7 +507,9 @@ function renderNonWork(d) {
   const rows = nwd.map(r => {
     const month = pick(r, ["month","m","mon"], "");
     const avgTemp = pick(r, ["avgTemp","tAvg"], "");
-    const hiLo = pick(r, ["avgHighLow","avgHighLowC","avgHighLowStr","avgHighLowStrC","avgHighLow","avgHighLowC","avgHighLowStr","avgHighLowStrC","avgHighLowC","avgHighLowStr","avgHighLowStrC","avgHighLow"], "") || pick(r, ["avgHighLow","avgHighLowStr","avgHighLowC","avgHighLowStrC","avgHighLowC"], "") || pick(r, ["avgHighLow"], "");
+    const hiLo =
+      pick(r, ["avgHighLow","avgHighLowC","avgHighLowStr","avgHighLowStrC"], "") ||
+      pick(r, ["avgHighLow"], "");
 
     const storm = pick(r, ["storm","sandstorm","dustStorm","shamal"], "");
     const rain = pick(r, ["rainDays","rain_day","rainyDays"], "");
@@ -499,18 +558,17 @@ function renderNonWork(d) {
 }
 
 function renderLaborCalc(d) {
-  // PDF 핵심 수치 (연간 세척비용 / 속도) :contentReference[oaicite:1]{index=1}
+  // 기본값(너 파일 기반 대표값으로 세팅해둔 값)
   const DEFAULT_ROBOT_USD_PER_M2_YEAR = 59.76;
   const DEFAULT_MANUAL_USD_PER_M2_YEAR = 21.07;
 
-  // 속도(패널/시간) 범위 :contentReference[oaicite:2]{index=2}
   const DEFAULT_ROBOT_PPH = 180;  // 150~200 중간값
   const DEFAULT_MANUAL_PPH = 18;  // 15~20 중간값
 
   return `
     <div class="muted">
-      올해 기준(입력값 기반)으로 한국 인건비/아랍에미리트 인건비/로봇을 비교합니다.  
-      (로봇·인력 세척 단가/속도는 제공한 자료의 대표값을 기본으로 넣었습니다.)
+      올해 기준(입력값 기반)으로 한국 인건비/아랍에미리트 인건비/로봇을 비교합니다.
+      (로봇·인력 단가/속도는 기본값으로 넣어두었고, 네가 바로 수정 가능)
     </div>
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:10px 0 12px;">
@@ -540,11 +598,25 @@ function renderLaborCalc(d) {
           <input id="manualUsdPerM2Year" type="number" value="${DEFAULT_MANUAL_USD_PER_M2_YEAR}" step="any"
                  style="width:140px;padding:8px;border:1px solid #e5e7eb;border-radius:10px;" />
         </div>
+        <div class="muted" style="margin-top:8px;">(단가 기반은 총 면적 × 단가로 바로 계산)</div>
       </div>
     </div>
 
     <div style="border:1px solid #e5e7eb; border-radius:14px; padding:12px; margin-bottom:12px;">
-      <div style="font-weight:800; margin-bottom:8px;">③ 인건비 입력(올해 기준)</div>
+      <div style="font-weight:800; margin-bottom:8px;">③ 속도(패널/시간)</div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <div>로봇</div>
+        <input id="robotPPH" type="number" value="${DEFAULT_ROBOT_PPH}" step="any"
+               style="width:120px;padding:8px;border:1px solid #e5e7eb;border-radius:10px;" />
+        <div>인력</div>
+        <input id="manualPPH" type="number" value="${DEFAULT_MANUAL_PPH}" step="any"
+               style="width:120px;padding:8px;border:1px solid #e5e7eb;border-radius:10px;" />
+      </div>
+      <div class="muted" style="margin-top:8px;">(속도 기반은 총 패널-세척량/속도로 시간 산정)</div>
+    </div>
+
+    <div style="border:1px solid #e5e7eb; border-radius:14px; padding:12px; margin-bottom:12px;">
+      <div style="font-weight:800; margin-bottom:8px;">④ 인건비 입력(올해 기준)</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
         <div>
           <div style="font-weight:700; margin-bottom:6px;">UAE (AED → USD)</div>
@@ -590,14 +662,10 @@ function renderLaborCalc(d) {
           기도시간 손실(1h/day) 반영
         </label>
       </div>
-
-      <div class="muted" style="margin-top:8px;">
-        * 라마단/기도시간 수치는 자료의 “시간 단축/손실” 항목을 반영하는 옵션입니다. :contentReference[oaicite:3]{index=3}
-      </div>
     </div>
 
     <div style="border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
-      <div style="font-weight:900; margin-bottom:8px;">④ 결과</div>
+      <div style="font-weight:900; margin-bottom:8px;">⑤ 결과</div>
 
       <table class="table">
         <thead>
@@ -646,18 +714,17 @@ function renderPanel(isoRaw, fallbackName) {
   const iso = (isIso3(selectedIsoRaw) && selectedIsoRaw !== "UNK") ? selectedIsoRaw : null;
   selectedISO = iso;
 
-  // title
-  let title = fallbackName || (isoRaw || "선택 국가");
-  if (iso && countryData?.[iso]?.name) title = countryData[iso].name;
-
   const nav = renderTopNav();
 
   if (!iso) {
+    const title = fallbackName || (isoRaw || "선택 국가");
     setInfo(title, nav + `<div class="muted">이 국가의 상세 데이터가 없습니다.</div>`);
     return;
   }
 
-  const d = countryData?.[iso];
+  const d = getCountryRecord(iso);
+  const title = (d?.name ? d.name : (fallbackName || iso));
+
   if (!d) {
     setInfo(title, nav + `<div class="muted">이 국가의 상세 데이터가 없습니다.</div>`);
     return;
@@ -688,7 +755,7 @@ function renderPanel(isoRaw, fallbackName) {
 // =========================
 function updateMaterialCalcUI() {
   if (!selectedISO) return;
-  const d = countryData?.[selectedISO];
+  const d = getCountryRecord(selectedISO);
   if (!d) return;
 
   const row = getSeriesRowByPeriod(d, selectedPeriod) || {};
@@ -740,6 +807,9 @@ function updateLaborCalcUI() {
   const robotUsdPerM2Year = Number(document.getElementById("robotUsdPerM2Year")?.value || 0);
   const manualUsdPerM2Year = Number(document.getElementById("manualUsdPerM2Year")?.value || 0);
 
+  const robotPPH = Number(document.getElementById("robotPPH")?.value || 0);
+  const manualPPH = Number(document.getElementById("manualPPH")?.value || 0);
+
   const uaeMonthlyAed = Number(document.getElementById("uaeMonthlyAed")?.value || 0);
   const aedToUsd = Number(document.getElementById("aedToUsd")?.value || 0);
   const uaeDaysPerMonth = Number(document.getElementById("uaeDaysPerMonth")?.value || 0);
@@ -759,15 +829,11 @@ function updateLaborCalcUI() {
   const robotAnnual = totalArea * robotUsdPerM2Year;
   const manualAnnual = totalArea * manualUsdPerM2Year;
 
-  // speed-based hours
-  const ROBOT_PPH = 180;
-  const MANUAL_PPH = 18;
-
   // total cleaning panel-count per year
   const totalPanelsPerYear = panels * cycles;
 
-  let robotHours = (ROBOT_PPH > 0) ? (totalPanelsPerYear / ROBOT_PPH) : 0;
-  let manualHours = (MANUAL_PPH > 0) ? (totalPanelsPerYear / MANUAL_PPH) : 0;
+  let robotHours = (robotPPH > 0) ? (totalPanelsPerYear / robotPPH) : 0;
+  let manualHours = (manualPPH > 0) ? (totalPanelsPerYear / manualPPH) : 0;
 
   // productivity adjustment: Ramadan (8h->6h => need 8/6 = 1.333x hours)
   if (applyRamadan) {
@@ -786,12 +852,15 @@ function updateLaborCalcUI() {
 
   // hourly wage
   const uaeMonthlyUsd = uaeMonthlyAed * aedToUsd;
-  const uaeHourly = (uaeDaysPerMonth > 0 && uaeHoursPerDay > 0) ? (uaeMonthlyUsd / (uaeDaysPerMonth * uaeHoursPerDay)) : 0;
+  const uaeHourly =
+    (uaeDaysPerMonth > 0 && uaeHoursPerDay > 0)
+      ? (uaeMonthlyUsd / (uaeDaysPerMonth * uaeHoursPerDay))
+      : 0;
 
   const krDailyUsd = krDailyKrw * krwToUsd;
   const krHourly = (krHoursPerDay > 0) ? (krDailyUsd / krHoursPerDay) : 0;
 
-  const laborCostUAE = manualHours * uaeHourly; // assume manual cleaning by labor
+  const laborCostUAE = manualHours * uaeHourly; // manual cleaning labor
   const laborCostKR = manualHours * krHourly;
 
   // output
@@ -808,7 +877,7 @@ function updateLaborCalcUI() {
   if (outArea) outArea.textContent = fmtNum(totalArea);
   if (outRobotAnnual) outRobotAnnual.textContent = fmtMoney(robotAnnual);
   if (outManualAnnual) outManualAnnual.textContent = fmtMoney(manualAnnual);
-  if (outManualAnnualKR) outManualAnnualKR.textContent = fmtMoney(manualAnnual); // 같은 단가표시(필요하면 한국 단가로 따로 입력 필드 추가 가능)
+  if (outManualAnnualKR) outManualAnnualKR.textContent = fmtMoney(manualAnnual);
 
   if (outRobotHours) outRobotHours.textContent = fmtNum(robotHours);
   if (outManualHours) outManualHours.textContent = fmtNum(manualHours);
@@ -826,7 +895,7 @@ function exportCSV() {
     alert("먼저 국가를 선택하세요.");
     return;
   }
-  const d = countryData?.[selectedISO];
+  const d = getCountryRecord(selectedISO);
   if (!d) {
     alert(`데이터 없음: ${selectedISO}`);
     return;
@@ -882,7 +951,14 @@ async function init() {
   try {
     const { json } = await fetchJsonFirstOk(DATA_URLS, "countrydata.json");
     countryData = normalizeCountryData(json);
+
+    // 안전장치: 키가 소문자만 들어온 경우를 대비해서 1회 보정
+    // (countryData 자체는 그대로 두고 getCountryRecord가 해결하지만, 디버깅 편의)
+    if (!countryData?.ARE && !countryData?.VNM) {
+      // no-op (getCountryRecord로 처리)
+    }
   } catch (e) {
+    countryDataLoadError = e;
     countryData = {};
   }
 
@@ -983,7 +1059,10 @@ async function init() {
       const isoRaw = props.__iso || "UNK";
       const name = props.__name || getName(props);
       const isoGood = (isIso3(isoRaw) && isoRaw !== "UNK") ? isoRaw : null;
-      const dataName = isoGood ? (countryData?.[isoGood]?.name || "") : "";
+
+      const d = isoGood ? getCountryRecord(isoGood) : null;
+      const dataName = d?.name || "";
+
       return norm(name).includes(qn) || norm(isoRaw).includes(qn) || norm(dataName).includes(qn);
     });
 
@@ -1049,25 +1128,24 @@ async function init() {
     const sel = e.target.closest("#periodSelect");
     if (sel) {
       selectedPeriod = sel.value;
-      // rerender current view to refresh price table/calc
       renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
       afterRenderHook();
       return;
     }
 
-    // material calc qty
     if (e.target && e.target.matches('input[data-mqty]')) {
       updateMaterialCalcUI();
       return;
     }
 
-    // labor calc inputs
     if (e.target && (
       e.target.id === "panelsCount" ||
       e.target.id === "panelArea" ||
       e.target.id === "cleanCycles" ||
       e.target.id === "robotUsdPerM2Year" ||
       e.target.id === "manualUsdPerM2Year" ||
+      e.target.id === "robotPPH" ||
+      e.target.id === "manualPPH" ||
       e.target.id === "uaeMonthlyAed" ||
       e.target.id === "aedToUsd" ||
       e.target.id === "uaeDaysPerMonth" ||
@@ -1096,6 +1174,8 @@ async function init() {
       e.target.id === "cleanCycles" ||
       e.target.id === "robotUsdPerM2Year" ||
       e.target.id === "manualUsdPerM2Year" ||
+      e.target.id === "robotPPH" ||
+      e.target.id === "manualPPH" ||
       e.target.id === "uaeMonthlyAed" ||
       e.target.id === "aedToUsd" ||
       e.target.id === "uaeDaysPerMonth" ||
@@ -1111,7 +1191,6 @@ async function init() {
 }
 
 function afterRenderHook() {
-  // after rendering a view, refresh calculations if needed
   if (view === "calc") updateMaterialCalcUI();
   if (view === "labor") updateLaborCalcUI();
 }
