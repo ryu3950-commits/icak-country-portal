@@ -1,4 +1,4 @@
-// app.js (지도 유지 + 비작업일수 키 불일치 해결 + CSV Export 버튼 추가)
+// app.js (지도 유지 + 비작업일수 키 불일치 해결 + CSV Export + 공사비 분석(UAE) 추가)
 
 const GEOJSON_URLS = [
   "./data/countries.geojson",
@@ -37,7 +37,14 @@ let selectedISO = null;     // "ARE" 같은 ISO3 (없으면 null)
 let selectedIsoRaw = "UNK"; // 원본 ISO 값 (UNK 포함)
 let selectedFID = null;     // 항상 있는 feature id(내부)
 let selectedName = null;    // 표시용 국가명
-let view = "materials";     // materials | nonwork
+let view = "materials";     // materials | nonwork | cost
+
+// 공사비 분석 상태(리렌더되더라도 값 유지)
+let costState = {
+  period: "",       // 예: "2025Q4"
+  rebarT: "",       // 철근(톤)
+  concreteM3: "",   // 콘크리트(m3)
+};
 
 // ---- helpers ----
 const isIso3 = (v) => typeof v === "string" && /^[A-Z]{3}$/.test(v) && v !== "-99";
@@ -265,7 +272,6 @@ function exportMaterialsAndNonworkCSV() {
     const weekend = pick(r, ["weekend", "weekendDays"], "");
     const holiday = pick(r, ["holidayWeekday", "holiday", "holidayWeekdays"], "");
 
-    // ✅ 여기 때문에 베트남만 비던 케이스를 잡아줌
     const confirmed = pick(r, ["confirmedOff", "fixedOff", "fixedOffDays", "confirmedNonwork"], "");
     const equiv = pick(r, ["equivOff8h", "eqOff8h", "eqOff", "equivalentOff8h"], "");
 
@@ -289,18 +295,114 @@ function exportMaterialsAndNonworkCSV() {
   }, 250);
 }
 
+/* =========================
+   공사비 분석 (UAE 데모)
+   - 입력: 철근(톤), 콘크리트(m3), 연도/분기
+   - 출력: 단가/합계/총공사비(재료비 2종)
+========================= */
+function getCostSeries(iso) {
+  const s = countryData?.[iso]?.constructionCost?.series;
+  return Array.isArray(s) ? s : [];
+}
+
+function getDefaultCostPeriod(iso) {
+  const series = getCostSeries(iso);
+  if (!series.length) return "";
+  return series[series.length - 1].period || "";
+}
+
+function getCostRow(iso, period) {
+  const series = getCostSeries(iso);
+  return series.find(x => String(x.period) === String(period)) || null;
+}
+
+function fmtMoney(n) {
+  const num = Number(n);
+  if (!isFinite(num)) return "—";
+  return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function updateCostResult() {
+  if (view !== "cost") return;
+  if (selectedISO !== "ARE") return;
+
+  const periodEl = document.getElementById("costPeriod");
+  const rebarEl = document.getElementById("costRebarT");
+  const concEl = document.getElementById("costConcreteM3");
+  const outEl = document.getElementById("costResult");
+
+  if (!periodEl || !rebarEl || !concEl || !outEl) return;
+
+  const period = periodEl.value || "";
+  const rebarT = parseFloat(rebarEl.value || "0");
+  const concreteM3 = parseFloat(concEl.value || "0");
+
+  costState.period = period;
+  costState.rebarT = rebarEl.value;
+  costState.concreteM3 = concEl.value;
+
+  const row = getCostRow("ARE", period);
+  if (!row) {
+    outEl.innerHTML = `<div class="muted">해당 분기 단가 데이터가 없습니다.</div>`;
+    return;
+  }
+
+  const rebarUnit = Number(row.rebar_usd_per_t);
+  const concUnit = Number(row.concrete_usd_per_m3);
+
+  const rebarCost = (isFinite(rebarT) ? rebarT : 0) * (isFinite(rebarUnit) ? rebarUnit : 0);
+  const concCost = (isFinite(concreteM3) ? concreteM3 : 0) * (isFinite(concUnit) ? concUnit : 0);
+  const total = rebarCost + concCost;
+
+  outEl.innerHTML = `
+    <div class="muted" style="margin-top:8px;">
+      단위: 철근 <b>USD/t</b>, 콘크리트 <b>USD/m³</b> (데모 데이터)
+    </div>
+
+    <table class="table" style="margin-top:8px;">
+      <thead>
+        <tr>
+          <th>항목</th>
+          <th class="right">수량</th>
+          <th class="right">단가</th>
+          <th class="right">금액</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>철근</td>
+          <td class="right">${isFinite(rebarT) ? fmtMoney(rebarT) : "0"} t</td>
+          <td class="right">${fmtMoney(rebarUnit)} USD/t</td>
+          <td class="right">${fmtMoney(rebarCost)} USD</td>
+        </tr>
+        <tr>
+          <td>콘크리트</td>
+          <td class="right">${isFinite(concreteM3) ? fmtMoney(concreteM3) : "0"} m³</td>
+          <td class="right">${fmtMoney(concUnit)} USD/m³</td>
+          <td class="right">${fmtMoney(concCost)} USD</td>
+        </tr>
+        <tr>
+          <td colspan="3"><b>합계(재료비 2종)</b></td>
+          <td class="right"><b>${fmtMoney(total)} USD</b></td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+}
+
 // ===== 패널 렌더 =====
 function renderPanel(isoRaw, fallbackName) {
   selectedIsoRaw = isoRaw || "UNK";
   const iso = (isIso3(selectedIsoRaw) && selectedIsoRaw !== "UNK") ? selectedIsoRaw : null;
   selectedISO = iso;
 
-  // ✅ 탭 + CSV 버튼(비작업일수 옆)
+  // ✅ 탭 + CSV 버튼 + 공사비 분석 버튼(CSV 옆)
   const tabs = `
-    <div style="display:flex; gap:8px; margin:10px 0 6px; align-items:center;">
+    <div style="display:flex; gap:8px; margin:10px 0 6px; align-items:center; flex-wrap:wrap;">
       <button data-view="materials" style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="materials"?"#111827":"#fff"};color:${view==="materials"?"#fff":"#111827"};cursor:pointer;">자재비</button>
       <button data-view="nonwork" style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="nonwork"?"#111827":"#fff"};color:${view==="nonwork"?"#fff":"#111827"};cursor:pointer;">비작업일수</button>
       <button data-action="csv" style="padding:8px 12px;border:1px solid #ddd;border-radius:14px;background:#fff;color:#111827;cursor:pointer;">CSV</button>
+      <button data-action="cost" style="padding:8px 12px;border:1px solid #ddd;border-radius:14px;background:${view==="cost"?"#111827":"#fff"};color:${view==="cost"?"#fff":"#111827"};cursor:pointer;">공사비 분석</button>
     </div>
   `;
 
@@ -380,7 +482,6 @@ function renderPanel(isoRaw, fallbackName) {
             const weekend = pick(r, ["weekend", "weekendDays"], "");
             const holiday = pick(r, ["holidayWeekday", "holiday", "holidayWeekdays"], "");
 
-            // ✅ 베트남/국가별 키 불일치 흡수
             const confirmed = pick(r, ["confirmedOff", "fixedOff", "fixedOffDays", "confirmedNonwork"], "");
             const equiv = pick(r, ["equivOff8h", "eqOff8h", "eqOff", "equivalentOff8h"], "");
 
@@ -418,8 +519,90 @@ function renderPanel(isoRaw, fallbackName) {
     </div>
   `;
 
-  const body = (view === "nonwork") ? nonWorkTable : materialsTable;
+  // ✅ 공사비 분석 UI (UAE만)
+  const costSeries = getCostSeries(iso);
+  if (!costState.period) costState.period = getDefaultCostPeriod(iso);
+
+  const costUI = `
+    <div style="margin-top:8px;">
+      ${
+        iso !== "ARE"
+          ? `<div class="muted">공사비 분석(데모)은 현재 UAE(ARE)만 지원합니다.</div>`
+          : `
+            <div class="muted">연도/분기 기준 단가(데모)를 적용해 철근·콘크리트 재료비를 계산합니다.</div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+              <div style="border:1px solid #e5e7eb; border-radius:14px; padding:10px;">
+                <div style="font-weight:700; margin-bottom:6px;">철근</div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <input
+                    id="costRebarT"
+                    data-cost-field="rebarT"
+                    type="number"
+                    inputmode="decimal"
+                    min="0"
+                    step="0.1"
+                    placeholder="예: 120"
+                    value="${esc(costState.rebarT)}"
+                    style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
+                  />
+                  <span class="muted">t</span>
+                </div>
+              </div>
+
+              <div style="border:1px solid #e5e7eb; border-radius:14px; padding:10px;">
+                <div style="font-weight:700; margin-bottom:6px;">콘크리트</div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <input
+                    id="costConcreteM3"
+                    data-cost-field="concreteM3"
+                    type="number"
+                    inputmode="decimal"
+                    min="0"
+                    step="1"
+                    placeholder="예: 850"
+                    value="${esc(costState.concreteM3)}"
+                    style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
+                  />
+                  <span class="muted">m³</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <div style="font-weight:700;">기준 연도/분기</div>
+              <select
+                id="costPeriod"
+                data-cost-field="period"
+                style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;"
+              >
+                ${
+                  costSeries.map(r => {
+                    const p = String(r.period || "");
+                    const sel = p === String(costState.period) ? "selected" : "";
+                    return `<option value="${esc(p)}" ${sel}>${esc(p)}</option>`;
+                  }).join("")
+                }
+              </select>
+            </div>
+
+            <div id="costResult"></div>
+          `
+      }
+    </div>
+  `;
+
+  const body =
+    (view === "nonwork") ? nonWorkTable :
+    (view === "cost") ? costUI :
+    materialsTable;
+
   setInfo(title, tabs + body + pppBlock);
+
+  // 공사비 결과 초기 1회 계산
+  if (view === "cost") {
+    queueMicrotask(() => updateCostResult());
+  }
 }
 
 // ===== Init =====
@@ -560,6 +743,8 @@ async function init() {
     selectedIsoRaw = "UNK";
     selectedFID = null;
     selectedName = null;
+    view = "materials";
+
     setInfo("국가를 선택하세요", `<div class="muted">지도를 클릭하면 아래에 정보가 표시됩니다.</div>`);
     highlightFID(null);
   });
@@ -568,11 +753,20 @@ async function init() {
     alert(" ");
   });
 
-  // ✅ info 영역: 탭 + CSV 버튼 이벤트(이벤트 위임)
-  document.getElementById("info").addEventListener("click", (e) => {
+  // ✅ info 영역: 탭 + CSV + 공사비 분석 버튼 이벤트(이벤트 위임)
+  const infoEl = document.getElementById("info");
+
+  infoEl.addEventListener("click", (e) => {
     const csvBtn = e.target.closest('button[data-action="csv"]');
     if (csvBtn) {
       exportMaterialsAndNonworkCSV();
+      return;
+    }
+
+    const costBtn = e.target.closest('button[data-action="cost"]');
+    if (costBtn) {
+      view = "cost";
+      renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
       return;
     }
 
@@ -581,6 +775,22 @@ async function init() {
     view = btn.dataset.view;
 
     renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
+  });
+
+  // ✅ 공사비 분석 입력 변화 반영(리렌더 없이 결과만 갱신)
+  infoEl.addEventListener("input", (e) => {
+    const field = e.target?.getAttribute?.("data-cost-field");
+    if (!field) return;
+    if (field === "rebarT") costState.rebarT = e.target.value;
+    if (field === "concreteM3") costState.concreteM3 = e.target.value;
+    updateCostResult();
+  });
+
+  infoEl.addEventListener("change", (e) => {
+    const field = e.target?.getAttribute?.("data-cost-field");
+    if (!field) return;
+    if (field === "period") costState.period = e.target.value;
+    updateCostResult();
   });
 }
 
