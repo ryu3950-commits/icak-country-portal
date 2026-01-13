@@ -1,53 +1,44 @@
-// app.js (Full) - robust
-// - "상세 데이터 없음" 99% 원인(데이터 미로드/경로/키구조/ISO 불일치) 흡수
-// - 변수명 countryData -> data 로 통일
-// - CSV + 공사비 분석 버튼 유지
-
-const GEOJSON_URLS = [
-  "./data/countries.geojson",
-  "./countries.geojson",
-  "./docs/data/countries.geojson",
-  "./country-demo/data/countries.geojson",
-];
-
-const DATA_URLS = [
-  "./data/countrydata.json",     // ✅ 실제 파일명 우선
-  "./data/countryData.json",
-  "./countrydata.json",
-  "./countryData.json",
-  "./docs/data/countrydata.json",
-  "./docs/data/countryData.json",
-  "./country-demo/data/countrydata.json",
-  "./country-demo/data/countryData.json",
-];
+// app.js (Full - GitHub Pages project page friendly)
+// FIX: "이 국가의 상세데이터가 없습니다." 해결
+//  - GitHub Pages(project page) 경로 대응: /<repo>/data/... 절대경로를 최우선으로 시도
+//  - countrydata.json 로드 성공 여부 콘솔 로그 추가
+//  - ISO 공백/개행/소문자 정규화 유지
+//  - CSV Export + 공사비 분석 버튼 유지
 
 const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
 
 const infoTitle = document.getElementById("infoTitle");
-const infoBody  = document.getElementById("infoBody");
+const infoBody = document.getElementById("infoBody");
 
-const searchInput  = document.getElementById("searchInput");
-const clearBtn     = document.getElementById("clearBtn");
-const searchBtn    = document.getElementById("searchBtn");
-const advancedBtn  = document.getElementById("advancedBtn");
+const searchInput = document.getElementById("searchInput");
+const clearBtn = document.getElementById("clearBtn");
+const searchBtn = document.getElementById("searchBtn");
+const advancedBtn = document.getElementById("advancedBtn");
 
 let map;
 let countriesGeo = null;
-
-// ✅ data 로 통일
-let data = {};
+let countryData = {};
 
 // 선택 상태
-let selectedISO = null;
-let selectedIsoRaw = "UNK";
-let selectedFID = null;
-let selectedName = null;
-let view = "materials"; // materials | nonwork | cost
+let selectedISO = null;     // "ARE" 같은 ISO3 (없으면 null)
+let selectedIsoRaw = "UNK"; // 원본 ISO 값 (UNK 포함)
+let selectedFID = null;     // 항상 있는 feature id(내부)
+let selectedName = null;    // 표시용 국가명
+let view = "materials";     // materials | nonwork | cost
 
 // 공사비 분석 상태
-let costState = { period: "", rebarT: "", concreteM3: "" };
+let costState = {
+  period: "",
+  rebarT: "",
+  concreteM3: "",
+};
 
 // ---- helpers ----
+const isIso3 = (v) => {
+  if (typeof v !== "string") return false;
+  const s = v.trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(s) && s !== "-99";
+};
 const norm = (s) => (s || "").toString().trim().toLowerCase();
 const esc = (s) =>
   String(s ?? "")
@@ -56,12 +47,6 @@ const esc = (s) =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-
-const isIso3 = (v) => {
-  if (typeof v !== "string") return false;
-  const s = v.trim().toUpperCase();
-  return /^[A-Z]{3}$/.test(s) && s !== "-99";
-};
 
 function pick(obj, keys, fallback = "") {
   for (const k of keys) {
@@ -115,14 +100,22 @@ function getName(props = {}) {
   );
 }
 
-// ISO3 뽑기
+// ISO3 뽑기 (trim/upper 강제)
 function getISOFromProps(props = {}) {
   const candidates = [
-    "ISO_A3","iso_a3","ISO3","iso3",
-    "ADM0_A3","adm0_a3",
-    "SOV_A3","sov_a3",
-    "ISO_A3_EH","iso_a3_eh",
-    "ISO3166_A3","ISO_3","iso_3",
+    "ISO_A3",
+    "iso_a3",
+    "ISO3",
+    "iso3",
+    "ADM0_A3",
+    "adm0_a3",
+    "SOV_A3",
+    "sov_a3",
+    "ISO_A3_EH",
+    "iso_a3_eh",
+    "ISO3166_A3",
+    "ISO_3",
+    "iso_3",
   ];
 
   for (const k of candidates) {
@@ -144,25 +137,7 @@ function isoFallbackByName(name) {
   return null;
 }
 
-// ✅ data 구조/키 정규화 (언랩 + 키 대문자/trim)
-function normalizeData(raw) {
-  // 언랩 케이스 흡수
-  const unwrapped =
-    raw?.data || raw?.countryData || raw?.countrydata || raw?.countries || raw;
-
-  // 배열이면 못 씀
-  if (!unwrapped || Array.isArray(unwrapped) || typeof unwrapped !== "object") return {};
-
-  const out = {};
-  for (const [k, v] of Object.entries(unwrapped)) {
-    const kk = (k ?? "").toString().trim().toUpperCase();
-    if (!kk) continue;
-    out[kk] = v;
-  }
-  return out;
-}
-
-// ✅ GeoJSON 전처리 (__iso/__name/__fid 강제)
+// ✅ __name / __iso / __fid 강제 주입 + ISO 정규화
 function preprocessCountriesGeo(geo) {
   const features = geo?.features || [];
   for (let i = 0; i < features.length; i++) {
@@ -170,9 +145,7 @@ function preprocessCountriesGeo(geo) {
     f.properties = f.properties || {};
 
     const name = getName(f.properties) || "Unknown";
-    const iso = (getISOFromProps(f.properties) || isoFallbackByName(name) || "UNK")
-      .toString().trim().toUpperCase();
-
+    const iso = (getISOFromProps(f.properties) || isoFallbackByName(name) || "UNK").trim().toUpperCase();
     const fid = (f.id !== undefined && f.id !== null) ? f.id : i;
 
     f.properties.__name = name;
@@ -210,6 +183,7 @@ function highlightFID(fid) {
     map.setFilter("countries-selected-outline", ["==", 1, 0]);
     return;
   }
+
   map.setFilter("countries-selected", ["==", ["get", "__fid"], fid]);
   map.setFilter("countries-selected-outline", ["==", ["get", "__fid"], fid]);
 }
@@ -247,9 +221,15 @@ function detectDesertSchema(d, arr) {
 }
 
 function exportMaterialsAndNonworkCSV() {
-  if (!selectedISO) return alert("먼저 국가를 선택하세요.");
-  const d = data?.[selectedISO];
-  if (!d) return alert(`데이터 없음: ${selectedISO}`);
+  if (!selectedISO) {
+    alert("먼저 국가를 선택하세요.");
+    return;
+  }
+  const d = countryData?.[selectedISO];
+  if (!d) {
+    alert(`데이터 없음: ${selectedISO}`);
+    return;
+  }
 
   const matHeaders = ["품목", "가격", "단위"];
   const matRows = (d.materials || []).map(x => [
@@ -260,50 +240,75 @@ function exportMaterialsAndNonworkCSV() {
   downloadCSV(`${selectedISO}_자재비.csv`, rowsToCSV(matHeaders, matRows));
 
   const arr = d.nonWorkDays || [];
-  if (!arr.length) return alert("비작업일수 데이터가 없어서 자재비만 다운로드했습니다.");
+  if (!arr.length) {
+    alert("비작업일수 데이터가 없어서 자재비만 다운로드했습니다.");
+    return;
+  }
 
   const isDesert = detectDesertSchema(d, arr);
   const third = isDesert ? "모래폭풍(회/월)" : "강우일(일/월,>=1mm)";
+
   const nwHeaders = ["월","평균기온","평균최고/최저", third, "주말", "공휴일(평일)", "확정 비작업일", "등가 비작업일(8h)", "비고"];
 
   const nwRows = arr.map(r => {
-    const month = pick(r, ["month","m","mon"], "");
-    const avgTemp = pick(r, ["avgTemp","tAvg","avg_temperature"], "");
-    const hiLo = pick(r, ["avgHiLo","avgHighLow","avgHighLowC","avgHighLowStr"], "") || buildHiLo(r);
-    const storm = pick(r, ["sandstorm","storm","dustStorm","shamal"], "");
-    const rainDays = pick(r, ["rainDays","rain_day","rainyDays"], "");
-    const weekend = pick(r, ["weekend","weekendDays"], "");
-    const holiday = pick(r, ["holidayWeekday","holiday","holidayWeekdays"], "");
-    const confirmed = pick(r, ["confirmedOff","fixedOff","fixedOffDays","confirmedNonwork"], "");
-    const equiv = pick(r, ["equivOff8h","eqOff8h","eqOff","equivalentOff8h"], "");
-    const note = pick(r, ["note","remark","remarks"], "");
-    return [month, avgTemp, hiLo, isDesert ? storm : rainDays, weekend, holiday, confirmed, equiv, note];
+    const month = pick(r, ["month", "m", "mon"], "");
+    const avgTemp = pick(r, ["avgTemp", "tAvg", "avg_temperature"], "");
+    const hiLo = pick(r, ["avgHiLo", "avgHighLow", "avgHighLowC", "avgHighLowStr"], "") || buildHiLo(r);
+
+    const storm = pick(r, ["sandstorm", "storm", "dustStorm", "shamal"], "");
+    const rainDays = pick(r, ["rainDays", "rain_day", "rainyDays"], "");
+
+    const weekend = pick(r, ["weekend", "weekendDays"], "");
+    const holiday = pick(r, ["holidayWeekday", "holiday", "holidayWeekdays"], "");
+
+    const confirmed = pick(r, ["confirmedOff", "fixedOff", "fixedOffDays", "confirmedNonwork"], "");
+    const equiv = pick(r, ["equivOff8h", "eqOff8h", "eqOff", "equivalentOff8h"], "");
+
+    const note = pick(r, ["note", "remark", "remarks"], "");
+
+    return [
+      month,
+      avgTemp,
+      hiLo,
+      isDesert ? storm : rainDays,
+      weekend,
+      holiday,
+      confirmed,
+      equiv,
+      note
+    ];
   });
 
-  setTimeout(() => downloadCSV(`${selectedISO}_비작업일수.csv`, rowsToCSV(nwHeaders, nwRows)), 250);
+  setTimeout(() => {
+    downloadCSV(`${selectedISO}_비작업일수.csv`, rowsToCSV(nwHeaders, nwRows));
+  }, 250);
 }
 
 /* =========================
-   공사비 분석 (데이터가 있으면 표시)
+   공사비 분석
 ========================= */
 function getCostSeries(iso) {
-  const s = data?.[iso]?.constructionCost?.series;
+  const s = countryData?.[iso]?.constructionCost?.series;
   return Array.isArray(s) ? s : [];
 }
+
 function getDefaultCostPeriod(iso) {
   const series = getCostSeries(iso);
   if (!series.length) return "";
   return series[series.length - 1].period || "";
 }
+
 function getCostRow(iso, period) {
   const series = getCostSeries(iso);
   return series.find(x => String(x.period) === String(period)) || null;
 }
+
 function fmtMoney(n) {
   const num = Number(n);
   if (!isFinite(num)) return "—";
   return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
+
 function updateCostResult() {
   if (view !== "cost") return;
   if (selectedISO !== "ARE") return;
@@ -312,6 +317,7 @@ function updateCostResult() {
   const rebarEl = document.getElementById("costRebarT");
   const concEl = document.getElementById("costConcreteM3");
   const outEl = document.getElementById("costResult");
+
   if (!periodEl || !rebarEl || !concEl || !outEl) return;
 
   const period = periodEl.value || "";
@@ -329,16 +335,21 @@ function updateCostResult() {
   }
 
   const rebarUnit = Number(row.rebar_usd_per_t);
-  const concUnit  = Number(row.concrete_usd_per_m3);
+  const concUnit = Number(row.concrete_usd_per_m3);
 
   const rebarCost = (isFinite(rebarT) ? rebarT : 0) * (isFinite(rebarUnit) ? rebarUnit : 0);
-  const concCost  = (isFinite(concreteM3) ? concreteM3 : 0) * (isFinite(concUnit) ? concUnit : 0);
+  const concCost = (isFinite(concreteM3) ? concreteM3 : 0) * (isFinite(concUnit) ? concUnit : 0);
   const total = rebarCost + concCost;
 
   outEl.innerHTML = `
     <table class="table" style="margin-top:8px;">
       <thead>
-        <tr><th>항목</th><th class="right">수량</th><th class="right">단가</th><th class="right">금액</th></tr>
+        <tr>
+          <th>항목</th>
+          <th class="right">수량</th>
+          <th class="right">단가</th>
+          <th class="right">금액</th>
+        </tr>
       </thead>
       <tbody>
         <tr>
@@ -378,17 +389,14 @@ function renderPanel(isoRaw, fallbackName) {
   `;
 
   let title = fallbackName || (isoRaw || "선택 국가");
-  if (iso && data?.[iso]) title = data[iso].name || title;
-
-  // ✅ 디버그(필요하면 주석 처리 가능)
-  // console.log("[renderPanel] isoRaw:", isoRaw, "iso:", iso, "data keys:", Object.keys(data));
+  if (iso && countryData?.[iso]) title = countryData[iso].name || title;
 
   if (!iso) {
     setInfo(title, tabs + `<div class="muted">이 국가의 상세 데이터가 없습니다.</div>`);
     return;
   }
 
-  const d = data?.[iso];
+  const d = countryData?.[iso];
   if (!d) {
     setInfo(title, tabs + `<div class="muted">이 국가의 상세 데이터가 없습니다.</div>`);
     return;
@@ -398,11 +406,11 @@ function renderPanel(isoRaw, fallbackName) {
 
   const matRows = (d.materials || []).map((r) => `
     <tr>
-      <td>${esc(pick(r, ["item","name","material"], ""))}</td>
+      <td>${esc(pick(r, ["item", "name", "material"], ""))}</td>
       <td class="right">${
         typeof r.price === "number"
           ? r.price.toLocaleString(undefined, { maximumFractionDigits: 3 })
-          : esc(pick(r, ["price","value"], ""))
+          : esc(pick(r, ["price", "value"], ""))
       }</td>
       <td>${esc(pick(r, ["unit"], ""))}</td>
     </tr>
@@ -411,7 +419,9 @@ function renderPanel(isoRaw, fallbackName) {
   const materialsTable = `
     <div class="muted">업데이트: ${esc(updated)}</div>
     <table class="table">
-      <thead><tr><th>품목</th><th class="right">가격</th><th>단위</th></tr></thead>
+      <thead>
+        <tr><th>품목</th><th class="right">가격</th><th>단위</th></tr>
+      </thead>
       <tbody>${matRows || `<tr><td colspan="3">데이터 없음</td></tr>`}</tbody>
     </table>
   `;
@@ -424,24 +434,34 @@ function renderPanel(isoRaw, fallbackName) {
     <table class="table">
       <thead>
         <tr>
-          <th>월</th><th class="right">평균기온</th><th class="right">평균최고/최저</th>
-          <th class="right">${thirdColName}</th><th class="right">주말</th><th class="right">공휴일(평일)</th>
-          <th class="right">확정 비작업일</th><th class="right">등가 비작업일(8h)</th><th>비고</th>
+          <th>월</th>
+          <th class="right">평균기온</th>
+          <th class="right">평균최고/최저</th>
+          <th class="right">${thirdColName}</th>
+          <th class="right">주말</th>
+          <th class="right">공휴일(평일)</th>
+          <th class="right">확정 비작업일</th>
+          <th class="right">등가 비작업일(8h)</th>
+          <th>비고</th>
         </tr>
       </thead>
       <tbody>
         ${
           nwd.map((r) => {
-            const month = pick(r, ["month","m","mon"], "");
-            const avgTemp = pick(r, ["avgTemp","tAvg"], "");
-            const hiLo = pick(r, ["avgHiLo","avgHighLow","avgHighLowC","avgHighLowStr"], "") || buildHiLo(r);
-            const storm = pick(r, ["sandstorm","storm","dustStorm","shamal"], "");
-            const rain = pick(r, ["rainDays","rain_day","rainyDays"], "");
-            const weekend = pick(r, ["weekend","weekendDays"], "");
-            const holiday = pick(r, ["holidayWeekday","holiday","holidayWeekdays"], "");
-            const confirmed = pick(r, ["confirmedOff","fixedOff","fixedOffDays","confirmedNonwork"], "");
-            const equiv = pick(r, ["equivOff8h","eqOff8h","eqOff","equivalentOff8h"], "");
-            const note = pick(r, ["note","remark","remarks"], "");
+            const month = pick(r, ["month", "m", "mon"], "");
+            const avgTemp = pick(r, ["avgTemp", "tAvg"], "");
+            const hiLo = pick(r, ["avgHiLo", "avgHighLow", "avgHighLowC", "avgHighLowStr"], "") || buildHiLo(r);
+
+            const storm = pick(r, ["sandstorm", "storm", "dustStorm", "shamal"], "");
+            const rain = pick(r, ["rainDays", "rain_day", "rainyDays"], "");
+
+            const weekend = pick(r, ["weekend", "weekendDays"], "");
+            const holiday = pick(r, ["holidayWeekday", "holiday", "holidayWeekdays"], "");
+
+            const confirmed = pick(r, ["confirmedOff", "fixedOff", "fixedOffDays", "confirmedNonwork"], "");
+            const equiv = pick(r, ["equivOff8h", "eqOff8h", "eqOff", "equivalentOff8h"], "");
+
+            const note = pick(r, ["note", "remark", "remarks"], "");
 
             return `
               <tr>
@@ -464,6 +484,7 @@ function renderPanel(isoRaw, fallbackName) {
 
   const lawUrl = d.ppp?.lawUrl;
   const statusUrl = d.ppp?.statusUrl;
+
   const pppBlock = `
     <div class="btnrow">
       <a class="btn" href="${lawUrl || "#"}" target="_blank" rel="noopener noreferrer"
@@ -486,18 +507,35 @@ function renderPanel(isoRaw, fallbackName) {
               <div style="border:1px solid #e5e7eb; border-radius:14px; padding:10px;">
                 <div style="font-weight:700; margin-bottom:6px;">철근</div>
                 <div style="display:flex; gap:8px; align-items:center;">
-                  <input id="costRebarT" data-cost-field="rebarT" type="number" min="0" step="0.1"
-                    placeholder="예: 120" value="${esc(costState.rebarT)}"
-                    style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;" />
+                  <input
+                    id="costRebarT"
+                    data-cost-field="rebarT"
+                    type="number"
+                    inputmode="decimal"
+                    min="0"
+                    step="0.1"
+                    placeholder="예: 120"
+                    value="${esc(costState.rebarT)}"
+                    style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
+                  />
                   <span class="muted">t</span>
                 </div>
               </div>
+
               <div style="border:1px solid #e5e7eb; border-radius:14px; padding:10px;">
                 <div style="font-weight:700; margin-bottom:6px;">콘크리트</div>
                 <div style="display:flex; gap:8px; align-items:center;">
-                  <input id="costConcreteM3" data-cost-field="concreteM3" type="number" min="0" step="1"
-                    placeholder="예: 850" value="${esc(costState.concreteM3)}"
-                    style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;" />
+                  <input
+                    id="costConcreteM3"
+                    data-cost-field="concreteM3"
+                    type="number"
+                    inputmode="decimal"
+                    min="0"
+                    step="1"
+                    placeholder="예: 850"
+                    value="${esc(costState.concreteM3)}"
+                    style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
+                  />
                   <span class="muted">m³</span>
                 </div>
               </div>
@@ -505,8 +543,11 @@ function renderPanel(isoRaw, fallbackName) {
 
             <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
               <div style="font-weight:700;">기준 연도/분기</div>
-              <select id="costPeriod" data-cost-field="period"
-                style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+              <select
+                id="costPeriod"
+                data-cost-field="period"
+                style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;"
+              >
                 ${
                   costSeries.map(r => {
                     const p = String(r.period || "");
@@ -530,25 +571,79 @@ function renderPanel(isoRaw, fallbackName) {
 
   setInfo(title, tabs + body + pppBlock);
 
-  if (view === "cost") queueMicrotask(updateCostResult);
+  if (view === "cost") queueMicrotask(() => updateCostResult());
+}
+
+/* =========================
+   URL candidates for GitHub Pages
+   - project page: https://<user>.github.io/<repo>/
+   - root data: /<repo>/data/...
+========================= */
+function buildRepoBase() {
+  // "/icak-country-portal/" 같은 형태를 얻고 싶음
+  const parts = location.pathname.split("/").filter(Boolean);
+  // project page일 경우: [ "icak-country-portal", ... ]
+  // user page일 경우: []
+  const repo = parts.length ? parts[0] : "";
+  return repo ? `/${repo}` : "";
+}
+
+function buildDataURLs() {
+  const base = buildRepoBase();
+
+  // 네가 실제로 확인한 URL을 최우선으로 넣음
+  const abs1 = `${base}/data/countrydata.json`;
+  const abs2 = `${base}/data/countryData.json`;
+
+  return [
+    abs1,
+    abs2,
+
+    // 상대경로 fallback
+    "./data/countrydata.json",
+    "./data/countryData.json",
+    "./countrydata.json",
+    "./countryData.json",
+
+    // (혹시 docs 폴더 구조로 올렸을 경우)
+    `${base}/docs/data/countrydata.json`,
+    `${base}/docs/data/countryData.json`,
+    "./docs/data/countrydata.json",
+    "./docs/data/countryData.json",
+  ];
+}
+
+function buildGeoJSONURLs() {
+  const base = buildRepoBase();
+
+  return [
+    `${base}/data/countries.geojson`,
+    "./data/countries.geojson",
+    `${base}/countries.geojson`,
+    "./countries.geojson",
+
+    // docs fallback
+    `${base}/docs/data/countries.geojson`,
+    "./docs/data/countries.geojson",
+  ];
 }
 
 // ===== Init =====
 async function init() {
   setInfo("국가를 선택하세요", `<div class="muted">지도를 클릭하면 아래에 정보가 표시됩니다.</div>`);
 
-  // ✅ 데이터 로드 (핵심!)
+  // 1) countrydata 로드
   try {
+    const DATA_URLS = buildDataURLs();
     const { json, url } = await fetchJsonFirstOk(DATA_URLS, "countrydata.json");
-    data = normalizeData(json);
-    console.log("[data] loaded:", url, "keys:", Object.keys(data));
+    countryData = json || {};
+    console.log("[countrydata] loaded:", url, "keys:", Object.keys(countryData));
   } catch (e) {
-    data = {};
-    console.warn("[data] load failed:", e);
-    setInfo("오류", `<div class="muted">데이터 파일을 불러오지 못했습니다. (Live Server로 실행 중인지 확인)</div>`);
+    countryData = {};
+    console.warn("[countrydata] load failed:", e);
   }
 
-  // 지도 생성
+  // 2) 지도 생성
   map = new maplibregl.Map({
     container: "map",
     style: MAP_STYLE,
@@ -559,6 +654,7 @@ async function init() {
 
   map.on("load", async () => {
     try {
+      const GEOJSON_URLS = buildGeoJSONURLs();
       const { json } = await fetchJsonFirstOk(GEOJSON_URLS, "countries.geojson");
       countriesGeo = preprocessCountriesGeo(json);
 
@@ -604,9 +700,7 @@ async function init() {
         const props = f.properties || {};
         const fid = props.__fid;
 
-        const isoRaw = (props.__iso || getISOFromProps(props) || "UNK")
-          .toString().trim().toUpperCase();
-
+        const isoRaw = (props.__iso || getISOFromProps(props) || "UNK").toString().trim().toUpperCase();
         const name = props.__name || getName(props) || "국가";
 
         selectedFID = fid;
@@ -624,13 +718,15 @@ async function init() {
       });
     } catch (e) {
       setInfo("오류", `<div class="muted">지도 데이터를 불러오지 못했습니다.</div>`);
+      console.error(e);
     }
   });
 
-  // 검색
+  // ===== 검색 =====
   const doSearch = () => {
     const q = searchInput.value.trim();
     if (!q || !countriesGeo?.features?.length) return;
+
     const qn = norm(q);
 
     const f = countriesGeo.features.find((ft) => {
@@ -638,11 +734,14 @@ async function init() {
       const isoRaw = (props.__iso || "UNK").toString().trim().toUpperCase();
       const name = props.__name || getName(props);
       const isoGood = (isIso3(isoRaw) && isoRaw !== "UNK") ? isoRaw : null;
-      const dataName = isoGood ? (data?.[isoGood]?.name_ko || data?.[isoGood]?.name || "") : "";
+      const dataName = isoGood ? (countryData?.[isoGood]?.name_ko || countryData?.[isoGood]?.name || "") : "";
       return norm(name).includes(qn) || norm(isoRaw).includes(qn) || norm(dataName).includes(qn);
     });
 
-    if (!f) return setInfo("국가를 선택하세요", `<div class="muted">검색 결과가 없습니다.</div>`);
+    if (!f) {
+      setInfo("국가를 선택하세요", `<div class="muted">검색 결과가 없습니다.</div>`);
+      return;
+    }
 
     const props = f.properties || {};
     const fid = props.__fid;
@@ -673,28 +772,33 @@ async function init() {
     selectedFID = null;
     selectedName = null;
     view = "materials";
+
     setInfo("국가를 선택하세요", `<div class="muted">지도를 클릭하면 아래에 정보가 표시됩니다.</div>`);
     highlightFID(null);
   });
 
   advancedBtn.addEventListener("click", () => alert(" "));
 
-  // 탭/CSV/공사비 버튼 이벤트 위임
   const infoEl = document.getElementById("info");
 
   infoEl.addEventListener("click", (e) => {
     const csvBtn = e.target.closest('button[data-action="csv"]');
-    if (csvBtn) return exportMaterialsAndNonworkCSV();
+    if (csvBtn) {
+      exportMaterialsAndNonworkCSV();
+      return;
+    }
 
     const costBtn = e.target.closest('button[data-action="cost"]');
     if (costBtn) {
       view = "cost";
-      return renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
+      renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
+      return;
     }
 
     const btn = e.target.closest("button[data-view]");
     if (!btn) return;
     view = btn.dataset.view;
+
     renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
   });
 
