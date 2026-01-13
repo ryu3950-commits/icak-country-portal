@@ -282,3 +282,26 @@ body {
     min-height: 420px;
   }
 }
+
+/* 지도 아래 info를 살짝 위로 올려서 보이게 */
+#info{
+  position: sticky;
+  top: 64px;            /* ✅ 여기 숫자만 조절: 작게=더 위로 붙음, 크게=더 아래로 내려감 */
+  z-index: 3;
+  background:#fff;
+  border-top: 1px solid #ddd;
+  padding: 10px 20px;
+}
+
+/* info가 살짝 떠 보이도록 */
+#info{
+  box-shadow: 0 -6px 18px rgba(0,0,0,.06);
+  border-radius: 12px 12px 0 0;
+}
+
+/* 지도는 그대로 유지 */
+#map{
+  height: 70vh;
+}
+
+
