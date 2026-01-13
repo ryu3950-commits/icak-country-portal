@@ -113,7 +113,7 @@
     "labor": [
       { "role": "비숙련(일급)", "wage": 18, "unit": "USD/day" },
       { "role": "숙련(일급)", "wage": 35, "unit": "USD/day" }
-    },
+    ],
     "ppp": {
       "lawUrl": "https://english.luatvietnam.vn/law-on-investment-in-the-form-of-public-private-partnership-no-64-2020-qh14-dated-june-18-2020-of-the-national-assembly-186267-doc1.html",
       "statusUrl": "https://fpt-is.com/en/new-e-government-procurement-system-officially-comes-into-operation-on-september-16/"
@@ -135,6 +135,4 @@
   }
 }
 
-  }
-}
 
