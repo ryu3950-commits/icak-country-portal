@@ -1,9 +1,8 @@
 /* =========================
    styles.css (Full)
-   - 전체 스크롤 1개만
-   - 지도 높이 조금 줄임 (info가 더 크게 보이게)
-   - info 내부 스크롤 없음
-   - sidebar 흰색 + active는 은은하게
+   - 첫 화면에서 지도↓ / 아래(자재비·비작업일수)↑
+   - 아래 패널 내부 스크롤 없음(브라우저 전체 스크롤 1개만)
+   - 사이드바 기본은 흰색 + active도 검정 안 되게(요청 반영)
 ========================= */
 
 /* Base reset */
@@ -21,12 +20,13 @@ body{
   display: grid;
   grid-template-columns: 260px 1fr;
   min-height: 100vh;
+  height: auto;              /* ✅ 고정 높이 금지 */
 }
 
-/* Sidebar (WHITE) */
+/* ===== Sidebar (White) ===== */
 .sidebar{
-  background: #ffffff;
-  color: #111827;
+  background: #ffffff !important;
+  color: #111827 !important;
   padding: 16px 14px;
   border-right: 1px solid #e5e7eb;
 }
@@ -42,29 +42,30 @@ body{
   display:flex;
   justify-content: space-between;
   align-items:center;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
-  color: #111827;
+
+  border: 1px solid #e5e7eb !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+
   padding: 12px 12px;
   border-radius: 14px;
   cursor: pointer;
   font-size: 14px;
 }
 
-.menu-item:hover{
-  background: #f9fafb;
-}
+.menu-item:hover{ background: #f9fafb !important; }
 
-/* ✅ active를 검정 꽉 채움 말고 은은하게 */
+/* ✅ 요청: "지역별"만 검정으로 보이는 active 제거(선택되어도 흰색 유지) */
 .menu-item.active{
-  background: #eef2ff;      /* 연한 보라/블루 */
-  border-color: #c7d2fe;
-  color: #111827;
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-color: #e5e7eb !important;
 }
 
 .menu-item .plus{
   opacity:.8;
   font-weight: 700;
+  color: currentColor !important;
 }
 
 /* Main */
@@ -72,6 +73,8 @@ body{
   display:flex;
   flex-direction: column;
   min-width: 0;
+  height: auto;              /* ✅ 고정 높이 금지 */
+  overflow: visible;         /* ✅ 내부 스크롤 금지 */
 }
 
 /* Header */
@@ -140,10 +143,7 @@ body{
   padding: 4px 6px;
   border-radius: 10px;
 }
-
-.icon-btn:hover{
-  background: rgba(17,24,39,.08);
-}
+.icon-btn:hover{ background: rgba(17,24,39,.08); }
 
 .advanced-btn{
   border: 1px solid #e5e7eb;
@@ -155,21 +155,19 @@ body{
   font-size: 14px;
   white-space: nowrap;
 }
-
-.advanced-btn:hover{
-  background: #f9fafb;
-}
+.advanced-btn:hover{ background: #f9fafb; }
 
 /* Map area */
 .map-wrap{
-  padding: 12px 18px 0;
+  padding: 10px 18px 0;  /* 살짝 줄여서 아래 패널이 더 보이게 */
   background: #f5f6f8;
 }
 
+/* ✅ 첫 화면에서 아래 패널이 더 보이도록 지도 높이 축소 */
 #map{
   width: 100%;
-  height: 48vh;             /* ✅ 지도 줄여서 info가 더 크게 보이게 */
-  min-height: 360px;
+  height: 55vh;        /* 70vh → 55vh (원하면 52~58 사이) */
+  min-height: 420px;
   border-radius: 18px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
@@ -179,31 +177,29 @@ body{
 /* Info panel (below map) */
 .info{
   background: #fff;
-  margin: 12px 18px 24px;
+  margin: 10px 18px 18px;
   border: 1px solid #e5e7eb;
   border-radius: 18px;
-  padding: 18px 20px 22px;
+  padding: 14px 18px 18px;
 
-  height: auto;
-  overflow: visible;        /* ✅ 내부 스크롤 없음 */
+  height: auto !important;       /* ✅ 내부 스크롤 방지 */
+  overflow: visible !important;  /* ✅ 브라우저 전체 스크롤만 */
+  min-height: 40vh;              /* ✅ 첫 화면에서 지금보다 더 크게(약 2배 느낌) */
 }
 
 /* Title/Body */
 #infoTitle{
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
   color: #111827;
 }
 
-#infoBody{
-  margin-top: 12px;
-}
+#infoBody{ margin-top: 10px; }
 
-/* Generic */
 .muted{
   color: #6b7280;
-  font-size: 14px;
+  font-size: 13px;
   margin-bottom: 10px;
 }
 
@@ -234,13 +230,10 @@ body{
   vertical-align: top;
 }
 
-.table tbody tr:last-child td{
-  border-bottom: none;
-}
-
+.table tbody tr:last-child td{ border-bottom: none; }
 .right{ text-align: right; }
 
-/* Buttons row */
+/* PPP buttons row */
 .btnrow{
   display:flex;
   gap: 10px;
@@ -261,51 +254,11 @@ body{
   cursor:pointer;
   font-size: 14px;
 }
-
 .btn:hover{ background: #f9fafb; }
 
-/* Calculator UI */
-.card{
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  padding: 14px 14px;
-  background: #fff;
-  margin-top: 10px;
-}
-
-.grid2{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.field label{
-  display:block;
-  font-size: 12px;
-  color: #374151;
-  margin-bottom: 6px;
-  font-weight: 700;
-}
-
-.field input, .field select{
-  width: 100%;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 10px 10px;
-  font-size: 14px;
-  outline: none;
-  background: #fff;
-}
-
-.field input:focus, .field select:focus{
-  border-color: #c7d2fe;
-  box-shadow: 0 0 0 3px rgba(199,210,254,.35);
-}
-
-.hr{
-  height: 1px;
-  background: #eef2f7;
-  margin: 12px 0;
+/* ✅ "밑에 정보 살짝 보이게" 느낌: 여백/그림자만 가볍게 */
+.info{
+  box-shadow: 0 -6px 18px rgba(0,0,0,.06);
 }
 
 /* Responsive */
@@ -313,15 +266,19 @@ body{
   .app{ grid-template-columns: 1fr; }
   .sidebar{ order: 2; }
   .main{ order: 1; }
+
   .search-wrap{
     flex-direction: column;
     align-items: stretch;
   }
+
   #map{
-    height: 44vh;
-    min-height: 320px;
+    height: 48vh;
+    min-height: 340px;
   }
-  .grid2{
-    grid-template-columns: 1fr;
+
+  .info{
+    min-height: 48vh;
   }
 }
+
