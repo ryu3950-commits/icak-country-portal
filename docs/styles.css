@@ -5,7 +5,8 @@ button { font-family: inherit; }
 .app{
   display: grid;
   grid-template-columns: 260px 1fr;
-  height: 100vh;
+  min-height: 100vh;   /* ✅ 전체 스크롤용 */
+  height: auto;        /* ✅ 내부 고정 높이 제거 */
 }
 
 /* ===== LEFT TOOLBAR ===== */
@@ -60,6 +61,7 @@ button { font-family: inherit; }
   min-width: 0;
 }
 
+/* 헤더/검색 */
 .page-header{
   padding: 14px 22px 8px;
   background:#fff;
@@ -145,35 +147,11 @@ button { font-family: inherit; }
 .advanced-btn:hover{ filter: brightness(0.95); }
 
 /* ===== MAP ===== */
-.map-wrap{
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 지도는 남은 공간을 다 먹게 */
+.map-wrap{ padding: 0; background:#fff; }
 #map{
-  flex: 1;
-  min-height: 300px; /* 너무 작아지는 것 방지 */
-  width: 100%;
-}
-
-/* 아래 정보 패널 */
-#info{
-  height: 30vh;
-  overflow-y: auto;
-  background: #fff;
-  border-top: 1px solid #ddd;
-  padding: 10px 20px;
-}
-
-#info {
-  height: 30vh;
-  overflow-y: auto;
-  background: #fff;
-  border-top: 1px solid #ddd;
-  padding: 10px 20px;
+  width:100%;
+  height: 70vh;     /* ✅ 지도 아래로 내려가게 */
+  min-height: 420px;
 }
 
 /* ===== INFO ===== */
@@ -234,13 +212,3 @@ button { font-family: inherit; }
   background:#fff;
 }
 .btn:hover{ background:#f9fafb; }
-
-.badge{
-  display:inline-block;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background:#f3f4f6;
-  font-size: 12px;
-  color:#374151;
-}
-
