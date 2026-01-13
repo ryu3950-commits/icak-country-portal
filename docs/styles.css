@@ -304,6 +304,40 @@ body {
   height: 70vh;
 }
 
+/* ===== Sidebar: Dark -> White ===== */
+.sidebar{
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-right: 1px solid #e5e7eb;
+}
+
+/* 메뉴 버튼(지역별/공종별/...) */
+.sidebar .menu-item{
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: none !important;
+}
+
+/* hover */
+.sidebar .menu-item:hover{
+  background: #f9fafb !important;
+}
+
+/* active(선택됨) */
+.sidebar .menu-item.active{
+  background: #111827 !important;
+  color: #ffffff !important;
+  border-color: #111827 !important;
+}
+
+/* + 아이콘 색 */
+.sidebar .menu-item .plus{
+  color: currentColor !important;
+}
+
+
+
 
 
 
