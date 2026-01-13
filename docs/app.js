@@ -1,28 +1,21 @@
 // app.js (Full)
-// - GitHub Pages 경로 대응: countrydata.json 우선 로드
-// - 탭 순서: 자재비 → 자재비계산 → 인건비계산 → 비작업일수 → CSV
-// - 자재비계산: 원유/LNG/구리/알루미늄/철근/시멘트 등 materials 전체 품목 수량*단가 합계
-// - 인건비계산: labor 전체 직종에 대해 인원/일수 입력 → 합계
-// - ISO 공백/개행/소문자 정규화 + geojson __iso/__fid 주입 + 선택 하이라이트
-// - CSV Export(자재비+비작업일수)
+// - GitHub Pages 경로 안정화(./data/* 우선) + 로드 로그
+// - ISO 정규화(trim/upper)로 "상세 데이터 없음" 방지
+// - 탭 순서: 자재비, 자재비계산, 인건비계산, 비작업일수, CSV
+// - 자재비계산: 분기(YYYYQ#) 선택 + 원유/LNG/구리/알루미늄/철근/시멘트 수량×단가 합산
+// - 인건비계산: 역할별 일급 × 인원 × 일수 합산
+// - CSV: 자재비+비작업일수 2개 다운로드
 
 const GEOJSON_URLS = [
   "./data/countries.geojson",
   "./countries.geojson",
-  "./country-demo/data/countries.geojson",
-  "./docs/data/countries.geojson",
 ];
 
 const DATA_URLS = [
-  // ✅ github pages에서 실제 살아있는 경로를 우선
   "./data/countrydata.json",
   "./data/countryData.json",
   "./countrydata.json",
   "./countryData.json",
-  "./country-demo/data/countrydata.json",
-  "./country-demo/data/countryData.json",
-  "./docs/data/countrydata.json",
-  "./docs/data/countryData.json",
 ];
 
 const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
@@ -44,13 +37,26 @@ let selectedISO = null;     // "ARE" 같은 ISO3 (없으면 null)
 let selectedIsoRaw = "UNK"; // 원본 ISO 값 (UNK 포함)
 let selectedFID = null;     // 항상 있는 feature id(내부)
 let selectedName = null;    // 표시용 국가명
+let view = "materials";     // materials | matcalc | laborcalc | nonwork
 
-// views: materials | matcalc | laborcalc | nonwork
-let view = "materials";
+// 자재비 계산 상태
+let matCalcState = {
+  period: "",
+  qty: {
+    brent: "",
+    lng: "",
+    copper: "",
+    aluminium: "",
+    rebar: "",
+    cement: "",
+  },
+};
 
-// 계산 상태
-let matCalcState = {};   // { idx: "qty" }
-let laborCalcState = {}; // { idx: { count:"", days:"" } }
+// 인건비 계산 상태
+let laborCalcState = {
+  days: "20",
+  headcount: {}, // roleKey -> 인원
+};
 
 // ---- helpers ----
 const isIso3 = (v) => {
@@ -122,13 +128,19 @@ function getName(props = {}) {
 // ISO3 뽑기 (trim/upper 강제)
 function getISOFromProps(props = {}) {
   const candidates = [
-    "ISO_A3", "iso_a3",
-    "ISO3", "iso3",
-    "ADM0_A3", "adm0_a3",
-    "SOV_A3", "sov_a3",
-    "ISO_A3_EH", "iso_a3_eh",
+    "ISO_A3",
+    "iso_a3",
+    "ISO3",
+    "iso3",
+    "ADM0_A3",
+    "adm0_a3",
+    "SOV_A3",
+    "sov_a3",
+    "ISO_A3_EH",
+    "iso_a3_eh",
     "ISO3166_A3",
-    "ISO_3", "iso_3",
+    "ISO_3",
+    "iso_3",
   ];
 
   for (const k of candidates) {
@@ -159,7 +171,9 @@ function preprocessCountriesGeo(geo) {
 
     const name = getName(f.properties) || "Unknown";
     const iso = (getISOFromProps(f.properties) || isoFallbackByName(name) || "UNK")
-      .trim().toUpperCase();
+      .toString()
+      .trim()
+      .toUpperCase();
     const fid = (f.id !== undefined && f.id !== null) ? f.id : i;
 
     f.properties.__name = name;
@@ -212,7 +226,7 @@ function csvEscape(v) {
 function rowsToCSV(headers, rows) {
   const head = headers.map(csvEscape).join(",");
   const body = rows.map(r => r.map(csvEscape).join(",")).join("\n");
-  return "\ufeff" + head + "\n" + body; // Excel BOM
+  return "\ufeff" + head + "\n" + body;
 }
 function downloadCSV(filename, csvText) {
   const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
@@ -245,7 +259,6 @@ function exportMaterialsAndNonworkCSV() {
     return;
   }
 
-  // 자재비
   const matHeaders = ["품목", "가격", "단위"];
   const matRows = (d.materials || []).map(x => [
     pick(x, ["item", "name", "material"], ""),
@@ -254,7 +267,6 @@ function exportMaterialsAndNonworkCSV() {
   ]);
   downloadCSV(`${selectedISO}_자재비.csv`, rowsToCSV(matHeaders, matRows));
 
-  // 비작업일수
   const arr = d.nonWorkDays || [];
   if (!arr.length) {
     alert("비작업일수 데이터가 없어서 자재비만 다운로드했습니다.");
@@ -283,10 +295,14 @@ function exportMaterialsAndNonworkCSV() {
     const note = pick(r, ["note", "remark", "remarks"], "");
 
     return [
-      month, avgTemp, hiLo,
+      month,
+      avgTemp,
+      hiLo,
       isDesert ? storm : rainDays,
-      weekend, holiday,
-      confirmed, equiv,
+      weekend,
+      holiday,
+      confirmed,
+      equiv,
       note
     ];
   });
@@ -297,12 +313,44 @@ function exportMaterialsAndNonworkCSV() {
 }
 
 /* =========================
-   계산 업데이트(자재비/인건비)
+   자재비계산(분기별)
 ========================= */
+function getMatSeries(d) {
+  const s = d?.materialsQuarterly?.series;
+  return Array.isArray(s) ? s : [];
+}
+function getDefaultMatPeriod(d) {
+  const s = getMatSeries(d);
+  if (!s.length) return "";
+  return s[s.length - 1].period || "";
+}
+function getMatRowByPeriod(d, period) {
+  const s = getMatSeries(d);
+  return s.find(x => String(x.period) === String(period)) || null;
+}
 function fmtMoney(n) {
   const num = Number(n);
   if (!isFinite(num)) return "—";
-  return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return num.toLocaleString(undefined, { maximumFractionDigits: 3 });
+}
+function toNum(v) {
+  const n = parseFloat(String(v ?? "").trim());
+  return isFinite(n) ? n : 0;
+}
+
+// 표준 key 세트(요청 6종)
+const MAT_KEYS = [
+  { key: "brent", label: "원유(Brent)", defaultUnit: "USD/bbl" },
+  { key: "lng", label: "LNG(JKM)", defaultUnit: "USD/MMBtu" },
+  { key: "copper", label: "구리", defaultUnit: "USD/t" },
+  { key: "aluminium", label: "알루미늄", defaultUnit: "USD/t" },
+  { key: "rebar", label: "철근", defaultUnit: "USD/t" },
+  { key: "cement", label: "시멘트", defaultUnit: "USD/t" },
+];
+
+function getMatMeta(d, key) {
+  const m = (d?.materials || []).find(x => String(x.key || "").toLowerCase() === key);
+  return m || null;
 }
 
 function updateMatCalcResult() {
@@ -310,166 +358,124 @@ function updateMatCalcResult() {
   if (!selectedISO) return;
 
   const d = countryData?.[selectedISO];
-  const outEl = document.getElementById("matCalcResult");
-  if (!d || !outEl) return;
+  if (!d) return;
 
-  const mats = Array.isArray(d.materials) ? d.materials : [];
-  if (!mats.length) {
-    outEl.innerHTML = `<div class="muted">자재비 데이터가 없습니다.</div>`;
-    return;
-  }
+  const periodEl = document.getElementById("matPeriod");
+  const outEl = document.getElementById("matCalcResult");
+  if (!periodEl || !outEl) return;
+
+  const period = periodEl.value || "";
+  matCalcState.period = period;
+
+  const row = getMatRowByPeriod(d, period);
 
   let total = 0;
+  const rowsHtml = MAT_KEYS.map(({ key, label, defaultUnit }) => {
+    const qtyEl = document.getElementById(`qty_${key}`);
+    const qty = toNum(qtyEl?.value);
+    if (qtyEl) matCalcState.qty[key] = qtyEl.value;
 
-  const rows = mats.map((m, i) => {
-    const qtyEl = document.getElementById(`matQty_${i}`);
-    const qty = parseFloat(qtyEl?.value || "0") || 0;
-    matCalcState[i] = qtyEl?.value ?? "";
+    const meta = getMatMeta(d, key);
+    const unit = (d?.materialsQuarterly?.units?.[key]) || meta?.unit || defaultUnit;
 
-    const unitPrice = Number(pick(m, ["price", "value"], 0));
-    const amount = (isFinite(unitPrice) ? unitPrice : 0) * qty;
-    total += amount;
+    // 단가: 분기 row에 있으면 사용, 없으면 meta.price(있을 때) fallback
+    const unitPrice = row && row[key] != null ? Number(row[key]) : Number(meta?.price ?? 0);
 
-    const item = pick(m, ["item", "name", "material"], "");
-    const unit = pick(m, ["unit"], "");
+    const cost = (isFinite(qty) ? qty : 0) * (isFinite(unitPrice) ? unitPrice : 0);
+    total += cost;
+
     return `
       <tr>
-        <td>${esc(item)}</td>
-        <td class="right">
-          <input
-            id="matQty_${i}"
-            data-mat-idx="${i}"
-            type="number"
-            inputmode="decimal"
-            min="0"
-            step="0.01"
-            placeholder="수량"
-            value="${esc(matCalcState[i] ?? "")}"
-            style="width:120px; padding:8px 10px; border:1px solid #e5e7eb; border-radius:12px;"
-          />
-        </td>
-        <td class="right">${fmtMoney(unitPrice)}</td>
-        <td>${esc(unit)}</td>
-        <td class="right"><b>${fmtMoney(amount)}</b></td>
+        <td>${esc(meta?.item || label)}</td>
+        <td class="right">${fmtMoney(qty)}</td>
+        <td class="right">${fmtMoney(unitPrice)} ${esc(unit)}</td>
+        <td class="right">${fmtMoney(cost)} USD</td>
       </tr>
     `;
   }).join("");
 
   outEl.innerHTML = `
-    <table class="table" style="margin-top:10px;">
+    <table class="table" style="margin-top:8px;">
       <thead>
         <tr>
           <th>품목</th>
           <th class="right">수량</th>
-          <th class="right">단가</th>
-          <th>단위</th>
+          <th class="right">단가(선택 분기)</th>
           <th class="right">금액</th>
         </tr>
       </thead>
       <tbody>
-        ${rows}
+        ${rowsHtml}
         <tr>
-          <td colspan="4"><b>합계</b></td>
-          <td class="right"><b>${fmtMoney(total)}</b></td>
+          <td colspan="3"><b>합계</b></td>
+          <td class="right"><b>${fmtMoney(total)} USD</b></td>
         </tr>
       </tbody>
     </table>
     <div class="muted" style="margin-top:8px;">
-      * 각 품목 수량은 해당 단위(예: $/bbl이면 bbl, $/t이면 t) 기준으로 입력하세요.
+      수량 단위는 품목 특성에 맞게 입력하세요 (예: 원유=bbl, LNG=MMBtu, 구리/알루미늄/철근/시멘트=t).
     </div>
   `;
 }
 
+/* =========================
+   인건비계산
+========================= */
 function updateLaborCalcResult() {
   if (view !== "laborcalc") return;
   if (!selectedISO) return;
 
   const d = countryData?.[selectedISO];
+  if (!d) return;
+
+  const daysEl = document.getElementById("laborDays");
   const outEl = document.getElementById("laborCalcResult");
-  if (!d || !outEl) return;
+  if (!daysEl || !outEl) return;
 
-  const labor = Array.isArray(d.labor) ? d.labor : [];
-  if (!labor.length) {
-    outEl.innerHTML = `<div class="muted">인건비 데이터가 없습니다.</div>`;
-    return;
-  }
+  const days = toNum(daysEl.value);
+  laborCalcState.days = String(daysEl.value ?? "");
 
+  const laborArr = Array.isArray(d.labor) ? d.labor : [];
   let total = 0;
 
-  const rows = labor.map((r, i) => {
-    const wage = Number(pick(r, ["wage", "price", "value"], 0));
+  const rowsHtml = laborArr.map((r, idx) => {
+    const role = pick(r, ["role", "name"], `Role ${idx + 1}`);
+    const wage = Number(pick(r, ["wage", "price", "daily"], 0));
     const unit = pick(r, ["unit"], "USD/day");
 
-    const countEl = document.getElementById(`laborCount_${i}`);
-    const daysEl = document.getElementById(`laborDays_${i}`);
+    const key = `labor_${idx}`;
+    const hcEl = document.getElementById(`hc_${key}`);
+    const head = toNum(hcEl?.value);
+    if (hcEl) laborCalcState.headcount[key] = hcEl.value;
 
-    const count = parseFloat(countEl?.value || "0") || 0;
-    const days = parseFloat(daysEl?.value || "0") || 0;
-
-    laborCalcState[i] = laborCalcState[i] || { count: "", days: "" };
-    laborCalcState[i].count = countEl?.value ?? "";
-    laborCalcState[i].days = daysEl?.value ?? "";
-
-    const amount = (isFinite(wage) ? wage : 0) * count * days;
-    total += amount;
-
-    const role = pick(r, ["role", "name"], "");
+    const cost = (isFinite(wage) ? wage : 0) * (isFinite(head) ? head : 0) * (isFinite(days) ? days : 0);
+    total += cost;
 
     return `
       <tr>
         <td>${esc(role)}</td>
-        <td class="right">${fmtMoney(wage)}</td>
-        <td>${esc(unit)}</td>
-        <td class="right">
-          <input
-            id="laborCount_${i}"
-            data-labor-idx="${i}"
-            data-labor-field="count"
-            type="number"
-            inputmode="numeric"
-            min="0"
-            step="1"
-            placeholder="인원"
-            value="${esc(laborCalcState[i]?.count ?? "")}"
-            style="width:90px; padding:8px 10px; border:1px solid #e5e7eb; border-radius:12px;"
-          />
-        </td>
-        <td class="right">
-          <input
-            id="laborDays_${i}"
-            data-labor-idx="${i}"
-            data-labor-field="days"
-            type="number"
-            inputmode="numeric"
-            min="0"
-            step="1"
-            placeholder="일수"
-            value="${esc(laborCalcState[i]?.days ?? "")}"
-            style="width:90px; padding:8px 10px; border:1px solid #e5e7eb; border-radius:12px;"
-          />
-        </td>
-        <td class="right"><b>${fmtMoney(amount)}</b></td>
+        <td class="right">${fmtMoney(head)}</td>
+        <td class="right">${fmtMoney(wage)} ${esc(unit)}</td>
+        <td class="right">${fmtMoney(cost)} USD</td>
       </tr>
     `;
   }).join("");
 
   outEl.innerHTML = `
-    <table class="table" style="margin-top:10px;">
+    <table class="table" style="margin-top:8px;">
       <thead>
         <tr>
           <th>직종</th>
-          <th class="right">일급</th>
-          <th>단위</th>
           <th class="right">인원</th>
-          <th class="right">일수</th>
-          <th class="right">금액</th>
+          <th class="right">일급</th>
+          <th class="right">금액(일급×인원×일수)</th>
         </tr>
       </thead>
       <tbody>
-        ${rows}
+        ${rowsHtml || `<tr><td colspan="4">데이터 없음</td></tr>`}
         <tr>
-          <td colspan="5"><b>합계</b></td>
-          <td class="right"><b>${fmtMoney(total)}</b></td>
+          <td colspan="3"><b>합계</b></td>
+          <td class="right"><b>${fmtMoney(total)} USD</b></td>
         </tr>
       </tbody>
     </table>
@@ -484,14 +490,14 @@ function renderPanel(isoRaw, fallbackName) {
   const iso = (isIso3(selectedIsoRaw) && selectedIsoRaw !== "UNK") ? selectedIsoRaw : null;
   selectedISO = iso;
 
-  // ✅ 탭 순서 요청 반영
+  // ✅ 탭(요청 순서) + CSV 버튼은 맨 끝
   const tabs = `
     <div style="display:flex; gap:8px; margin:10px 0 6px; align-items:center; flex-wrap:wrap;">
-      <button data-view="materials"  style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="materials"?"#111827":"#fff"};color:${view==="materials"?"#fff":"#111827"};cursor:pointer;">자재비</button>
-      <button data-view="matcalc"    style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="matcalc"?"#111827":"#fff"};color:${view==="matcalc"?"#fff":"#111827"};cursor:pointer;">자재비계산</button>
-      <button data-view="laborcalc"  style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="laborcalc"?"#111827":"#fff"};color:${view==="laborcalc"?"#fff":"#111827"};cursor:pointer;">인건비계산</button>
-      <button data-view="nonwork"    style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="nonwork"?"#111827":"#fff"};color:${view==="nonwork"?"#fff":"#111827"};cursor:pointer;">비작업일수</button>
-      <button data-action="csv"      style="padding:8px 12px;border:1px solid #ddd;border-radius:14px;background:#fff;color:#111827;cursor:pointer;">CSV</button>
+      <button data-view="materials" style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="materials"?"#111827":"#fff"};color:${view==="materials"?"#fff":"#111827"};cursor:pointer;">자재비</button>
+      <button data-view="matcalc" style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="matcalc"?"#111827":"#fff"};color:${view==="matcalc"?"#fff":"#111827"};cursor:pointer;">자재비계산</button>
+      <button data-view="laborcalc" style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="laborcalc"?"#111827":"#fff"};color:${view==="laborcalc"?"#fff":"#111827"};cursor:pointer;">인건비계산</button>
+      <button data-view="nonwork" style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${view==="nonwork"?"#111827":"#fff"};color:${view==="nonwork"?"#fff":"#111827"};cursor:pointer;">비작업일수</button>
+      <button data-action="csv" style="padding:8px 12px;border:1px solid #ddd;border-radius:14px;background:#fff;color:#111827;cursor:pointer;">CSV</button>
     </div>
   `;
 
@@ -511,7 +517,7 @@ function renderPanel(isoRaw, fallbackName) {
 
   const updated = d.materialsUpdated || d.updated || "—";
 
-  // 1) 자재비 테이블
+  // ---- 자재비(표) ----
   const matRows = (d.materials || []).map((r) => `
     <tr>
       <td>${esc(pick(r, ["item", "name", "material"], ""))}</td>
@@ -534,7 +540,7 @@ function renderPanel(isoRaw, fallbackName) {
     </table>
   `;
 
-  // 2) 비작업일수 테이블
+  // ---- 비작업일수 ----
   const nwd = d.nonWorkDays || [];
   const isDesert = detectDesertSchema(d, nwd);
   const thirdColName = isDesert ? "모래폭풍(회/월)" : "강우일(일/월,>=1mm)";
@@ -591,21 +597,119 @@ function renderPanel(isoRaw, fallbackName) {
     </table>
   `;
 
-  // 3) 자재비 계산 UI (materials 전체 품목)
+  // ---- 자재비계산 UI ----
+  const matSeries = getMatSeries(d);
+  if (!matCalcState.period) matCalcState.period = getDefaultMatPeriod(d);
+
   const matCalcUI = `
-    <div class="muted">자재비 계산(수량 × 단가). 품목별 단위 기준으로 수량을 입력하세요.</div>
+    <div class="muted">선택한 분기(YYYYQ#)의 단가로 자재비를 계산합니다.</div>
+
+    <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <div style="font-weight:700;">기준 연도/분기</div>
+      <select
+        id="matPeriod"
+        data-mat-field="period"
+        style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;"
+      >
+        ${
+          matSeries.map(r => {
+            const p = String(r.period || "");
+            const sel = p === String(matCalcState.period) ? "selected" : "";
+            return `<option value="${esc(p)}" ${sel}>${esc(p)}</option>`;
+          }).join("") || `<option value="">(시계열 없음)</option>`
+        }
+      </select>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+      ${MAT_KEYS.map(({ key, label, defaultUnit }) => {
+        const meta = getMatMeta(d, key);
+        const unit = (d?.materialsQuarterly?.units?.[key]) || meta?.unit || defaultUnit;
+        return `
+          <div style="border:1px solid #e5e7eb; border-radius:14px; padding:10px;">
+            <div style="font-weight:700; margin-bottom:6px;">${esc(meta?.item || label)}</div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input
+                id="qty_${key}"
+                data-mat-field="qty"
+                data-mat-key="${key}"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="0.1"
+                placeholder="수량 입력"
+                value="${esc(matCalcState.qty[key] ?? "")}"
+                style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
+              />
+              <span class="muted">${esc(unit.split("/").pop() || unit)}</span>
+            </div>
+          </div>
+        `;
+      }).join("")}
+    </div>
+
     <div id="matCalcResult"></div>
   `;
 
-  // 4) 인건비 계산 UI
-  const laborCalcUI = `
-    <div class="muted">인건비 계산(일급 × 인원 × 일수)</div>
+  // ---- 인건비계산 UI ----
+  const laborArr = Array.isArray(d.labor) ? d.labor : [];
+  const laborUI = `
+    <div class="muted">일급 × 인원 × 일수로 인건비를 계산합니다.</div>
+
+    <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <div style="font-weight:700;">작업일수</div>
+      <input
+        id="laborDays"
+        data-labor-field="days"
+        type="number"
+        inputmode="numeric"
+        min="0"
+        step="1"
+        value="${esc(laborCalcState.days)}"
+        style="width:140px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
+      />
+      <span class="muted">days</span>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+      ${
+        laborArr.map((r, idx) => {
+          const role = pick(r, ["role", "name"], `Role ${idx + 1}`);
+          const wage = pick(r, ["wage", "price", "daily"], "");
+          const unit = pick(r, ["unit"], "USD/day");
+          const key = `labor_${idx}`;
+          const val = laborCalcState.headcount[key] ?? "";
+          return `
+            <div style="border:1px solid #e5e7eb; border-radius:14px; padding:10px;">
+              <div style="font-weight:700; margin-bottom:6px;">${esc(role)}</div>
+              <div class="muted" style="margin:0 0 8px;">일급: ${esc(wage)} ${esc(unit)}</div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input
+                  id="hc_${key}"
+                  data-labor-field="headcount"
+                  data-labor-key="${key}"
+                  type="number"
+                  inputmode="numeric"
+                  min="0"
+                  step="1"
+                  placeholder="인원"
+                  value="${esc(val)}"
+                  style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
+                />
+                <span class="muted">명</span>
+              </div>
+            </div>
+          `;
+        }).join("") || `<div class="muted">인건비 데이터가 없습니다.</div>`
+      }
+    </div>
+
     <div id="laborCalcResult"></div>
   `;
 
+  // ---- PPP 링크 ----
   const lawUrl = d.ppp?.lawUrl;
   const statusUrl = d.ppp?.statusUrl;
-
   const pppBlock = `
     <div class="btnrow">
       <a class="btn" href="${lawUrl || "#"}" target="_blank" rel="noopener noreferrer"
@@ -617,8 +721,8 @@ function renderPanel(isoRaw, fallbackName) {
 
   const body =
     (view === "nonwork") ? nonWorkTable :
+    (view === "laborcalc") ? laborUI :
     (view === "matcalc") ? matCalcUI :
-    (view === "laborcalc") ? laborCalcUI :
     materialsTable;
 
   setInfo(title, tabs + body + pppBlock);
@@ -633,30 +737,30 @@ function renderPanel(isoRaw, fallbackName) {
 async function init() {
   setInfo("국가를 선택하세요", `<div class="muted">지도를 클릭하면 아래에 정보가 표시됩니다.</div>`);
 
-  // 데이터 로드
+  // countryData 로드 + 로그
   try {
     const { json, url } = await fetchJsonFirstOk(DATA_URLS, "countrydata.json");
     countryData = json || {};
-    console.log("[countrydata] loaded:", url, "keys:", Object.keys(countryData));
+    console.log("[countryData] loaded:", url, "keys:", Object.keys(countryData));
   } catch (e) {
     countryData = {};
-    console.warn("[countrydata] load failed:", e);
+    console.warn("[countryData] load failed:", e);
+    setInfo("오류", `<div class="muted">데이터 파일을 불러오지 못했습니다. (GitHub Pages 경로/대소문자/배포 확인)</div>`);
   }
 
-  // 지도 생성 (✅ 중동 확대 시작)
+  // ✅ 시작 화면: 중동 확대
   map = new maplibregl.Map({
     container: "map",
     style: MAP_STYLE,
-    center: [54.37, 24.45], // UAE 근처
-    zoom: 4.2,
-    pitch: 0,
-    bearing: 0,
+    center: [51.5, 24.0], // UAE 근처
+    zoom: 3.6,
   });
   map.addControl(new maplibregl.NavigationControl(), "top-right");
 
   map.on("load", async () => {
     try {
-      const { json } = await fetchJsonFirstOk(GEOJSON_URLS, "countries.geojson");
+      const { json, url } = await fetchJsonFirstOk(GEOJSON_URLS, "countries.geojson");
+      console.log("[geojson] loaded:", url);
       countriesGeo = preprocessCountriesGeo(json);
 
       map.addSource("countries", { type: "geojson", data: countriesGeo });
@@ -714,14 +818,12 @@ async function init() {
           if (isFinite(bbox?.[0]?.[0])) map.fitBounds(bbox, { padding: 60, duration: 700 });
         }
 
-        // 국가를 새로 선택하면 기본 탭은 "자재비"
         view = "materials";
         renderPanel(isoRaw, name);
       });
-
     } catch (e) {
-      setInfo("오류", `<div class="muted">지도 데이터를 불러오지 못했습니다.</div>`);
-      console.warn(e);
+      console.warn("geojson load error:", e);
+      setInfo("오류", `<div class="muted">지도 데이터를 불러오지 못했습니다. (data/countries.geojson 배포 확인)</div>`);
     }
   });
 
@@ -782,9 +884,9 @@ async function init() {
 
   advancedBtn.addEventListener("click", () => alert(" "));
 
-  // ===== 패널 버튼/입력 이벤트 위임 =====
   const infoEl = document.getElementById("info");
 
+  // 탭/CSV 클릭(이벤트 위임)
   infoEl.addEventListener("click", (e) => {
     const csvBtn = e.target.closest('button[data-action="csv"]');
     if (csvBtn) {
@@ -794,27 +896,41 @@ async function init() {
 
     const btn = e.target.closest("button[data-view]");
     if (!btn) return;
-    view = btn.dataset.view;
 
+    view = btn.dataset.view;
     renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
   });
 
-  // 자재비계산 입력 반영
+  // 자재비계산 input
   infoEl.addEventListener("input", (e) => {
-    const matIdx = e.target?.getAttribute?.("data-mat-idx");
-    if (matIdx !== null && matIdx !== undefined) {
-      matCalcState[matIdx] = e.target.value;
+    const matField = e.target?.getAttribute?.("data-mat-field");
+    if (matField === "qty") {
+      const key = e.target.getAttribute("data-mat-key");
+      if (key) matCalcState.qty[key] = e.target.value;
       updateMatCalcResult();
       return;
     }
 
-    const laborIdx = e.target?.getAttribute?.("data-labor-idx");
-    if (laborIdx !== null && laborIdx !== undefined) {
-      laborCalcState[laborIdx] = laborCalcState[laborIdx] || { count: "", days: "" };
-      const f = e.target.getAttribute("data-labor-field");
-      if (f === "count") laborCalcState[laborIdx].count = e.target.value;
-      if (f === "days") laborCalcState[laborIdx].days = e.target.value;
+    const laborField = e.target?.getAttribute?.("data-labor-field");
+    if (laborField === "days") {
+      laborCalcState.days = e.target.value;
       updateLaborCalcResult();
+      return;
+    }
+    if (laborField === "headcount") {
+      const key = e.target.getAttribute("data-labor-key");
+      if (key) laborCalcState.headcount[key] = e.target.value;
+      updateLaborCalcResult();
+      return;
+    }
+  });
+
+  // select 변경
+  infoEl.addEventListener("change", (e) => {
+    if (e.target && e.target.id === "matPeriod") {
+      matCalcState.period = e.target.value;
+      updateMatCalcResult();
+      return;
     }
   });
 }
