@@ -1,12 +1,8 @@
-// app.js (LIGHT LABOR ADDED)
-// - 인건비/로봇 "비교 계산"은 안 함 (오류 원인 제거)
-// - 탭에 "인건비 계산" 버튼 추가 (laborcalc)
-// - "자재비 계산" 화면 하단에 인건비 표(d.labor) 추가
-// - 분기(period) = materialsQuarterly.series의 YYYYQ#만 사용
-// - 공사원가: 선택분기 단가 표
-// - 자재비 계산: 선택분기 단가 * 수량 + 합계
-// - 비작업일수: 표 표시
-// - CSV 다운로드: 공사원가(선택분기) + 비작업일수
+// app.js (LIGHT LABOR ADDED - UPDATED)
+// ✅ 인건비 표 위치: "공사원가(costs)"의 자재비 표 아래
+// ✅ 인건비 섹션의 설명 문구(국가 데이터에 있는...) 제거
+// ✅ "자재비 계산(matcalc)" 화면에서는 인건비 표 제거
+// ✅ 탭: 공사원가 / 자재비 계산 / 인건비 계산 / 비작업일수 / CSV
 
 const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
 
@@ -417,7 +413,6 @@ function exportMaterialsAndNonworkCSV() {
 
 // ============== render blocks ==============
 function renderTabs() {
-  // 버튼 순서: 공사원가, 자재비 계산, 인건비 계산, 비작업일수, CSV
   const mkBtn = (id, label, active) => `
     <button data-view="${id}"
       style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${active ? "#111827" : "#fff"};color:${active ? "#fff" : "#111827"};cursor:pointer;">
@@ -477,7 +472,6 @@ function renderLaborBlock(d) {
 
   return `
     <div style="margin-top:16px; font-weight:900;">인건비</div>
-    <div class="muted" style="margin-top:4px;">(국가 데이터에 있는 labor 목록을 그대로 표시)</div>
     <table class="table" style="margin-top:8px;">
       <thead><tr><th>구분</th><th class="right">금액</th><th>단위</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="3">데이터 없음</td></tr>`}</tbody>
@@ -508,6 +502,8 @@ function renderCostsView(d) {
       <thead><tr><th>품목</th><th class="right">가격</th><th>단위</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="3">데이터 없음</td></tr>`}</tbody>
     </table>
+
+    ${renderLaborBlock(d)}
   `;
 }
 
@@ -526,7 +522,7 @@ function renderMatCalcView(d) {
   const rows = items
     .map((it) => {
       const up = getMaterialUnitPrice(d, it.key, period);
-      const unitPrice = up.usd; // null이면 "—"
+      const unitPrice = up.usd;
       const unitStr = up.unit || (it.qtyLabel ? `USD/${it.qtyLabel}` : "USD");
 
       const qtyVal = matCalcState.qty[it.key] ?? "";
@@ -566,8 +562,6 @@ function renderMatCalcView(d) {
       <tbody>${rows}</tbody>
     </table>
     <div id="matTotal" style="margin-top:12px; font-weight:900; text-align:right; font-size:16px;"></div>
-
-    ${renderLaborBlock(d)}
   `;
 }
 
@@ -597,10 +591,8 @@ function updateMatTotal() {
 }
 
 function renderLaborCalcView(d) {
-  // 계산은 하지 않고, 데이터에 있는 인건비 표만 크게 보여주는 화면
-  return `
-    ${renderLaborBlock(d)}
-  `;
+  // 계산 없이 표만 보여주는 "인건비 계산" 탭
+  return `${renderLaborBlock(d)}`;
 }
 
 function renderNonWorkView(d) {
