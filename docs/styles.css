@@ -1,15 +1,6 @@
-/* =========================
-   styles.css (FULL)
-   목표
-   - 좌측 사이드바: 흰색
-   - 지도: 75vh 고정
-   - 아래 정보패널(자재비/비작업일수): 25vh 고정 + 내부 스크롤
-   - (중요) sticky/겹침 제거해서 지도 클릭 정상 동작
-========================= */
 
-/* Base reset */
 * { box-sizing: border-box; }
-html, body { height: 100%; }
+html, body { height: auto; }
 body{
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", Arial, sans-serif;
@@ -22,20 +13,19 @@ body{
   display: grid;
   grid-template-columns: 260px 1fr;
   min-height: 100vh;
+  height: auto;
 }
 
-/* =========================
-   Sidebar (WHITE)
-========================= */
+/* ===== Sidebar (WHITE) ===== */
 .sidebar{
   background: #ffffff;
   color: #111827;
-  border-right: 1px solid #e5e7eb;
   padding: 16px 14px;
+  border-right: 1px solid #e5e7eb;
 }
 
 .menu{
-  display: flex;
+  display:flex;
   flex-direction: column;
   gap: 10px;
 }
@@ -56,30 +46,27 @@ body{
   font-size: 14px;
 }
 
-.menu-item:hover{
-  background: #f9fafb;
-}
+.menu-item:hover{ background: #f9fafb; }
 
-/* ✅ active도 흰색 유지 (검정 제거) */
+/* ✅ active도 검정색으로 안 바뀌게: 그냥 일반 상태와 동일 + 테두리만 살짝 강조 */
 .menu-item.active{
   background: #ffffff;
   color: #111827;
-  border-color: #e5e7eb;
+  border-color: #d1d5db;
 }
 
 .menu-item .plus{
-  opacity: .8;
+  opacity:.7;
   font-weight: 700;
-  color: currentColor;
 }
 
-/* =========================
-   Main
-========================= */
+/* Main */
 .main{
-  display: flex;
+  display:flex;
   flex-direction: column;
   min-width: 0;
+  height: auto;
+  overflow: visible; /* 내부 스크롤 금지 */
 }
 
 /* Header */
@@ -168,49 +155,42 @@ body{
   background: #f9fafb;
 }
 
-/* =========================
-   Map + Info layout
-   - 지도 75vh
-   - 아래 info 25vh
-========================= */
-
-/* Map area wrapper */
+/* Map area */
 .map-wrap{
   padding: 12px 18px 0;
   background: #f5f6f8;
 }
 
-/* MAP */
+/* ✅ 지도 크기: 항상 유지 (원하면 70vh 유지 / 더 키우면 75vh) */
 #map{
   width: 100%;
-  height: 75vh;           /* ✅ 지도 75% */
-  min-height: 520px;      /* 필요 시 조정 */
+  height: 70vh;
+  min-height: 520px;
   border-radius: 18px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
   background: #e5e7eb;
 }
 
-/* INFO panel (below map) */
+/* ===== Info panel (below map) ===== */
+/* ✅ 첫 화면에서 지금보다 2배 크게: 25vh -> 50vh */
 .info{
   background: #fff;
-  margin: 12px 18px 18px;
+  margin: 10px 18px 18px;
   border: 1px solid #e5e7eb;
   border-radius: 18px;
   padding: 14px 18px 18px;
 
-  height: 25vh;           /* ✅ 정보 25% */
-  overflow-y: auto;       /* ✅ 내부 스크롤 */
+  height: 50vh;        /* ✅ 2배 */
+  overflow-y: auto;    /* 표가 길면 여기만 스크롤 */
 }
 
-/* ⚠️ 중요: sticky/겹침 제거 (지도 클릭 막는 원인) */
-#info{
-  position: static;
-  top: auto;
-  z-index: auto;
+/* “살짝 위로 올려서(위쪽이 조금 보이게)” 느낌: margin-top을 줄여줌 */
+.info{
+  margin-top: 8px;
 }
 
-/* Title/Body */
+/* 타이틀/바디 */
 #infoTitle{
   margin: 0;
   font-size: 18px;
@@ -222,6 +202,7 @@ body{
   margin-top: 10px;
 }
 
+/* Generic */
 .muted{
   color: #6b7280;
   font-size: 13px;
@@ -283,13 +264,9 @@ body{
   font-size: 14px;
 }
 
-.btn:hover{
-  background: #f9fafb;
-}
+.btn:hover{ background: #f9fafb; }
 
-/* =========================
-   Responsive
-========================= */
+/* Responsive */
 @media (max-width: 920px){
   .app{ grid-template-columns: 1fr; }
   .sidebar{ order: 2; }
@@ -306,14 +283,6 @@ body{
   }
 
   .info{
-    height: 40vh;   /* 모바일에서 정보패널 조금 더 넓게 */
+    height: 55vh; /* 모바일은 조금 더 크게 */
   }
 }
-
-
-
-
-
-
-
-
