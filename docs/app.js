@@ -1,6 +1,7 @@
-// app.js (NO-LABOR VERSION)
-// - 인건비/로봇 비교 제거
-// - 탭/CSV 클릭 안되는 문제 안정화
+// app.js (LIGHT LABOR ADDED)
+// - 인건비/로봇 "비교 계산"은 안 함 (오류 원인 제거)
+// - 탭에 "인건비 계산" 버튼 추가 (laborcalc)
+// - "자재비 계산" 화면 하단에 인건비 표(d.labor) 추가
 // - 분기(period) = materialsQuarterly.series의 YYYYQ#만 사용
 // - 공사원가: 선택분기 단가 표
 // - 자재비 계산: 선택분기 단가 * 수량 + 합계
@@ -50,7 +51,7 @@ let selectedIsoRaw = "UNK";
 let selectedFID = null;
 let selectedName = null;
 
-let view = "costs"; // costs | matcalc | nonwork
+let view = "costs"; // costs | matcalc | laborcalc | nonwork
 
 // 자재비 계산 상태(분기/수량)
 let matCalcState = {
@@ -416,7 +417,7 @@ function exportMaterialsAndNonworkCSV() {
 
 // ============== render blocks ==============
 function renderTabs() {
-  // 버튼 순서: 공사원가, 자재비 계산, 비작업일수, CSV
+  // 버튼 순서: 공사원가, 자재비 계산, 인건비 계산, 비작업일수, CSV
   const mkBtn = (id, label, active) => `
     <button data-view="${id}"
       style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${active ? "#111827" : "#fff"};color:${active ? "#fff" : "#111827"};cursor:pointer;">
@@ -428,6 +429,7 @@ function renderTabs() {
     <div style="display:flex; gap:8px; margin:10px 0 6px; align-items:center; flex-wrap:wrap;">
       ${mkBtn("costs", "공사원가", view === "costs")}
       ${mkBtn("matcalc", "자재비 계산", view === "matcalc")}
+      ${mkBtn("laborcalc", "인건비 계산", view === "laborcalc")}
       ${mkBtn("nonwork", "비작업일수", view === "nonwork")}
       <button data-action="csv"
         style="padding:8px 12px;border:1px solid #ddd;border-radius:14px;background:#fff;color:#111827;cursor:pointer;">
@@ -459,6 +461,27 @@ function renderPeriodSelect(d) {
         ${options || `<option value="">—</option>`}
       </select>
     </div>
+  `;
+}
+
+function renderLaborBlock(d) {
+  const labor = Array.isArray(d?.labor) ? d.labor : [];
+  const rows = labor
+    .map((x) => {
+      const role = esc(pick(x, ["role", "name", "title"], ""));
+      const w = toNum(pick(x, ["wage", "value", "price"], ""));
+      const unit = esc(pick(x, ["unit"], ""));
+      return `<tr><td>${role}</td><td class="right">${w !== null ? fmtNum(w, 2) : "—"}</td><td>${unit}</td></tr>`;
+    })
+    .join("");
+
+  return `
+    <div style="margin-top:16px; font-weight:900;">인건비</div>
+    <div class="muted" style="margin-top:4px;">(국가 데이터에 있는 labor 목록을 그대로 표시)</div>
+    <table class="table" style="margin-top:8px;">
+      <thead><tr><th>구분</th><th class="right">금액</th><th>단위</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="3">데이터 없음</td></tr>`}</tbody>
+    </table>
   `;
 }
 
@@ -543,6 +566,8 @@ function renderMatCalcView(d) {
       <tbody>${rows}</tbody>
     </table>
     <div id="matTotal" style="margin-top:12px; font-weight:900; text-align:right; font-size:16px;"></div>
+
+    ${renderLaborBlock(d)}
   `;
 }
 
@@ -569,6 +594,13 @@ function updateMatTotal() {
   const el = document.getElementById("matTotal");
   if (!el) return;
   el.textContent = hasAny ? `합계: ${fmtNum(sum, 2)} USD` : `합계: —`;
+}
+
+function renderLaborCalcView(d) {
+  // 계산은 하지 않고, 데이터에 있는 인건비 표만 크게 보여주는 화면
+  return `
+    ${renderLaborBlock(d)}
+  `;
 }
 
 function renderNonWorkView(d) {
@@ -640,7 +672,7 @@ function renderPanel(isoRaw, fallbackName) {
   const iso = isIso3(selectedIsoRaw) && selectedIsoRaw !== "UNK" ? selectedIsoRaw : null;
   selectedISO = iso;
 
-  let title = fallbackName || (isoRaw || "선택 국가");
+  let title = fallbackName || isoRaw || "선택 국가";
   if (iso && countryData?.[iso]) title = countryData[iso].name || title;
 
   const tabs = renderTabs();
@@ -662,6 +694,7 @@ function renderPanel(isoRaw, fallbackName) {
   let body = "";
   if (view === "costs") body = renderCostsView(d);
   else if (view === "matcalc") body = renderMatCalcView(d);
+  else if (view === "laborcalc") body = renderLaborCalcView(d);
   else if (view === "nonwork") body = renderNonWorkView(d);
 
   setInfo(title, tabs + body);
@@ -859,5 +892,3 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
-
-
