@@ -286,7 +286,7 @@ body {
 /* 지도 아래 info를 살짝 위로 올려서 보이게 */
 #info{
   position: sticky;
-  top: 48px;            /* ✅ 여기 숫자만 조절: 작게=더 위로 붙음, 크게=더 아래로 내려감 */
+  top: 30px;            /* 여기 숫자만 조절: 작게=더 위로 붙음, 크게=더 아래로 내려감 */
   z-index: 3;
   background:#fff;
   border-top: 1px solid #ddd;
@@ -303,6 +303,7 @@ body {
 #map{
   height: 70vh;
 }
+
 
 
 
