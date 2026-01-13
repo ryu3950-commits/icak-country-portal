@@ -1,4 +1,4 @@
-// app.js (오류/매칭 수정 + 안내 문구 간결 버전)
+// app.js (지도 유지 + 비작업일수 옆 CSV Export 추가 버전)
 
 const GEOJSON_URLS = [
   "./data/countries.geojson",
@@ -178,33 +178,125 @@ function highlightFID(fid) {
   map.setFilter("countries-selected-outline", ["==", ["get", "__fid"], fid]);
 }
 
+/* =========================
+   CSV Export (자재비 + 비작업일수)
+   - app.js만으로 동작 (index.html 수정 X)
+========================= */
+function csvEscape(v){
+  const s = String(v ?? "");
+  return /[,"\n\r]/.test(s) ? `"${s.replaceAll('"','""')}"` : s;
+}
+function rowsToCSV(headers, rows){
+  const head = headers.map(csvEscape).join(",");
+  const body = rows.map(r => r.map(csvEscape).join(",")).join("\n");
+  return "\ufeff" + head + "\n" + body; // Excel BOM
+}
+function downloadCSV(filename, csvText){
+  const blob = new Blob([csvText], { type:"text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportMaterialsAndNonworkCSV(){
+  if (!selectedISO){
+    alert("먼저 국가를 선택하세요.");
+    return;
+  }
+  const d = countryData?.[selectedISO];
+  if (!d){
+    alert(`데이터가 없습니다: ${selectedISO}`);
+    return;
+  }
+
+  // 1) 자재비 CSV
+  const matHeaders = ["품목","가격","단위","업데이트"];
+  const matRows = (d.materials || []).map(x => [
+    x.item ?? "",
+    x.price ?? "",
+    x.unit ?? "",
+    d.materialsUpdated || d.updated || ""
+  ]);
+  const matCSV = rowsToCSV(matHeaders, matRows);
+
+  // 2) 비작업일수 CSV
+  const nwd = d.nonWorkDays || [];
+  if (!nwd.length){
+    downloadCSV(`${selectedISO}_자재비.csv`, matCSV);
+    alert("비작업일수 데이터가 없어 자재비만 다운로드합니다.");
+    return;
+  }
+
+  const isUAE = d.nonWorkSchema === "UAE"; // 네 렌더 기준 그대로
+  const nwHeaders = isUAE
+    ? ["월","평균기온(°C)","평균최고/최저(°C)","모래폭풍(회/월)","주말(토+일)","공휴일(평일)","확정 비작업일","등가 비작업일(8h)","비고"]
+    : ["월","평균기온(°C)","평균최고/최저(°C)","강우일(일/월,>=1mm)","주말(토+일)","공휴일(평일)","확정 비작업일","등가 비작업일(8h)","비고"];
+
+  // ✅ renderPanel에서 쓰는 키 이름과 동일하게 뽑음(avgTemp/avgHiLo/sandstorm/rainDays/...)
+  const nwRows = nwd.map(r => ([
+    r.month ?? "",
+    r.avgTemp ?? "",
+    r.avgHiLo ?? "",
+    isUAE ? (r.sandstorm ?? "") : (r.rainDays ?? ""),
+    r.weekend ?? "",
+    r.holidayWeekday ?? "",
+    r.confirmedOff ?? "",
+    r.equivOff8h ?? "",
+    r.note ?? ""
+  ]));
+
+  const nwCSV = rowsToCSV(nwHeaders, nwRows);
+
+  // ✅ 2개 파일 연속 다운로드(브라우저가 막으면 “다중 다운로드 허용” 설정 필요할 수 있음)
+  downloadCSV(`${selectedISO}_자재비.csv`, matCSV);
+  setTimeout(() => downloadCSV(`${selectedISO}_비작업일수.csv`, nwCSV), 250);
+}
+
 // ===== 패널 렌더 =====
 function renderPanel(isoRaw, fallbackName) {
   selectedIsoRaw = isoRaw || "UNK";
   const iso = (isIso3(selectedIsoRaw) && selectedIsoRaw !== "UNK") ? selectedIsoRaw : null;
   selectedISO = iso;
 
+  // ✅ 탭 + CSV 버튼 (비작업일수 옆)
   const tabs = `
-    <div style="display:flex; gap:8px; margin:10px 0 6px;">
-      <button data-view="materials" style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;background:${view==="materials"?"#111827":"#fff"};color:${view==="materials"?"#fff":"#111827"};cursor:pointer;">자재비</button>
-      <button data-view="nonwork" style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;background:${view==="nonwork"?"#111827":"#fff"};color:${view==="nonwork"?"#fff":"#111827"};cursor:pointer;">비작업일수</button>
+    <div style="display:flex; gap:8px; margin:10px 0 6px; align-items:center; flex-wrap:wrap;">
+      <button data-view="materials"
+        style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;
+               background:${view==="materials"?"#111827":"#fff"};
+               color:${view==="materials"?"#fff":"#111827"};
+               cursor:pointer;">자재비</button>
+
+      <button data-view="nonwork"
+        style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;
+               background:${view==="nonwork"?"#111827":"#fff"};
+               color:${view==="nonwork"?"#fff":"#111827"};
+               cursor:pointer;">비작업일수</button>
+
+      <button data-action="csv"
+        style="padding:8px 10px;border:1px solid #ddd;border-radius:10px;background:#fff;color:#111827;cursor:pointer;">
+        CSV
+      </button>
     </div>
   `;
 
   // 제목: ARE/VNM은 JSON의 name(한글)만 사용, 그 외는 기존대로
-let title = fallbackName || (isoRaw || "선택 국가");
+  let title = fallbackName || (isoRaw || "선택 국가");
 
-if (iso && countryData?.[iso]) {
-  if (iso === "ARE" || iso === "VNM") {
-    title = countryData[iso].name; // ✅ 한글로만 (예: "아랍에미리트(UAE)", "베트남(Vietnam)")
-  } else {
-    // 다른 국가는 JSON name이 있으면 그걸 쓰고, 없으면 fallbackName
-    title = countryData[iso].name || title;
+  if (iso && countryData?.[iso]) {
+    if (iso === "ARE" || iso === "VNM") {
+      title = countryData[iso].name;
+    } else {
+      title = countryData[iso].name || title;
+    }
   }
-}
 
-
-  // ISO가 없거나(UNK) 데이터가 없으면: 깔끔한 안내만
+  // ISO가 없거나(UNK) 데이터가 없으면: 안내
   if (!iso) {
     setInfo(title, tabs + `<div class="muted">이 국가의 상세 데이터가 없습니다.</div>`);
     return;
@@ -309,7 +401,6 @@ async function init() {
     countryData = json || {};
   } catch (e) {
     countryData = {};
-    // 실패해도 “국가를 선택하세요”는 유지 (조용히)
   }
 
   // 2) 지도 생성
@@ -402,7 +493,7 @@ async function init() {
       const isoRaw = props.__iso || "UNK";
       const name = props.__name || getName(props);
       const isoGood = (isIso3(isoRaw) && isoRaw !== "UNK") ? isoRaw : null;
-      const dataName = isoGood ? countryData?.[isoGood]?.name_ko : "";
+      const dataName = isoGood ? (countryData?.[isoGood]?.name_ko || countryData?.[isoGood]?.name || "") : "";
       return norm(name).includes(qn) || norm(isoRaw).includes(qn) || norm(dataName).includes(qn);
     });
 
@@ -447,8 +538,16 @@ async function init() {
     alert(" ");
   });
 
-  // info 영역 탭 클릭
+  // info 영역 탭/CSV 클릭 (✅ 여기서 CSV 먼저 처리!)
   document.getElementById("info").addEventListener("click", (e) => {
+    // CSV 버튼
+    const csvBtn = e.target.closest('button[data-action="csv"]');
+    if (csvBtn){
+      exportMaterialsAndNonworkCSV();
+      return;
+    }
+
+    // 탭 버튼
     const btn = e.target.closest("button[data-view]");
     if (!btn) return;
     view = btn.dataset.view;
@@ -459,7 +558,3 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
-
-
-
-
