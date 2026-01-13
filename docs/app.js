@@ -1,12 +1,47 @@
-// app.js (Full - GitHub Pages project page friendly)
-// FIX: "이 국가의 상세데이터가 없습니다." 해결
-//  - GitHub Pages(project page) 경로 대응: /<repo>/data/... 절대경로를 최우선으로 시도
-//  - countrydata.json 로드 성공 여부 콘솔 로그 추가
-//  - ISO 공백/개행/소문자 정규화 유지
-//  - CSV Export + 공사비 분석 버튼 유지
+// app.js (Full, GitHub Pages 경로문제까지 해결판)
+// - countrydata/countryData 대소문자 모두 시도
+// - ./, ../, ../../ + repo base(/<repo>/) 기준까지 시도 (docs/나 country-demo/에서 열어도 OK)
+// - ISO 공백/개행/소문자 정규화
+// - 로드 실패 시 어떤 URL이 실패했는지 UI + 콘솔에 표시
+// - CSV Export + 공사비 분석 버튼 유지
+
+// ====== URL 후보 생성 (GitHub Pages 하위폴더에서도 찾기) ======
+const repoBase = (() => {
+  // project pages: https://<user>.github.io/<repo>/...
+  // pathname 첫 토큰이 repo일 확률이 높음
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  return parts.length ? `/${parts[0]}/` : "/";
+})();
+
+function makeUrlCandidates(relPaths) {
+  const prefixes = ["./", "../", "../../", repoBase];
+  const out = [];
+  for (const p of prefixes) {
+    for (const r of relPaths) {
+      // prefix가 repoBase(슬래시 포함)면 중복 슬래시 정리
+      const url = (p === repoBase) ? `${repoBase}${r}` : `${p}${r}`;
+      out.push(url.replace(/\/{2,}/g, "/").replace(":/", "://")); // http(s):// 보호
+    }
+  }
+  // 중복 제거
+  return [...new Set(out)];
+}
+
+const GEOJSON_URLS = makeUrlCandidates([
+  "data/countries.geojson",
+  "countries.geojson",
+]);
+
+const DATA_URLS = makeUrlCandidates([
+  "data/countrydata.json",
+  "data/countryData.json",
+  "countrydata.json",
+  "countryData.json",
+]);
 
 const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
 
+// ====== DOM ======
 const infoTitle = document.getElementById("infoTitle");
 const infoBody = document.getElementById("infoBody");
 
@@ -39,7 +74,9 @@ const isIso3 = (v) => {
   const s = v.trim().toUpperCase();
   return /^[A-Z]{3}$/.test(s) && s !== "-99";
 };
+
 const norm = (s) => (s || "").toString().trim().toLowerCase();
+
 const esc = (s) =>
   String(s ?? "")
     .replaceAll("&", "&amp;")
@@ -103,19 +140,13 @@ function getName(props = {}) {
 // ISO3 뽑기 (trim/upper 강제)
 function getISOFromProps(props = {}) {
   const candidates = [
-    "ISO_A3",
-    "iso_a3",
-    "ISO3",
-    "iso3",
-    "ADM0_A3",
-    "adm0_a3",
-    "SOV_A3",
-    "sov_a3",
-    "ISO_A3_EH",
-    "iso_a3_eh",
+    "ISO_A3", "iso_a3",
+    "ISO3", "iso3",
+    "ADM0_A3", "adm0_a3",
+    "SOV_A3", "sov_a3",
+    "ISO_A3_EH", "iso_a3_eh",
     "ISO3166_A3",
-    "ISO_3",
-    "iso_3",
+    "ISO_3", "iso_3",
   ];
 
   for (const k of candidates) {
@@ -291,24 +322,20 @@ function getCostSeries(iso) {
   const s = countryData?.[iso]?.constructionCost?.series;
   return Array.isArray(s) ? s : [];
 }
-
 function getDefaultCostPeriod(iso) {
   const series = getCostSeries(iso);
   if (!series.length) return "";
   return series[series.length - 1].period || "";
 }
-
 function getCostRow(iso, period) {
   const series = getCostSeries(iso);
   return series.find(x => String(x.period) === String(period)) || null;
 }
-
 function fmtMoney(n) {
   const num = Number(n);
   if (!isFinite(num)) return "—";
   return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
-
 function updateCostResult() {
   if (view !== "cost") return;
   if (selectedISO !== "ARE") return;
@@ -389,7 +416,10 @@ function renderPanel(isoRaw, fallbackName) {
   `;
 
   let title = fallbackName || (isoRaw || "선택 국가");
-  if (iso && countryData?.[iso]) title = countryData[iso].name || title;
+  if (iso && countryData?.[iso]) {
+    // ✅ UAE 한글이 안 뜨는 이슈 방지: name_ko → name 순으로
+    title = countryData[iso].name_ko || countryData[iso].name || title;
+  }
 
   if (!iso) {
     setInfo(title, tabs + `<div class="muted">이 국가의 상세 데이터가 없습니다.</div>`);
@@ -449,8 +479,8 @@ function renderPanel(isoRaw, fallbackName) {
         ${
           nwd.map((r) => {
             const month = pick(r, ["month", "m", "mon"], "");
-            const avgTemp = pick(r, ["avgTemp", "tAvg"], "");
-            const hiLo = pick(r, ["avgHiLo", "avgHighLow", "avgHighLowC", "avgHighLowStr"], "") || buildHiLo(r);
+            const avgTemp = pick(r, ["avgTemp", "tAvg", "avg_temperature"], "");
+            const hiLo = pick(r, ["avgHiLo", "avgHighLow", "avgHighLowC", "avgHighLowStr", "avgHighLow"], "") || buildHiLo(r);
 
             const storm = pick(r, ["sandstorm", "storm", "dustStorm", "shamal"], "");
             const rain = pick(r, ["rainDays", "rain_day", "rainyDays"], "");
@@ -507,17 +537,9 @@ function renderPanel(isoRaw, fallbackName) {
               <div style="border:1px solid #e5e7eb; border-radius:14px; padding:10px;">
                 <div style="font-weight:700; margin-bottom:6px;">철근</div>
                 <div style="display:flex; gap:8px; align-items:center;">
-                  <input
-                    id="costRebarT"
-                    data-cost-field="rebarT"
-                    type="number"
-                    inputmode="decimal"
-                    min="0"
-                    step="0.1"
-                    placeholder="예: 120"
-                    value="${esc(costState.rebarT)}"
-                    style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
-                  />
+                  <input id="costRebarT" data-cost-field="rebarT" type="number" inputmode="decimal" min="0" step="0.1"
+                    placeholder="예: 120" value="${esc(costState.rebarT)}"
+                    style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;" />
                   <span class="muted">t</span>
                 </div>
               </div>
@@ -525,17 +547,9 @@ function renderPanel(isoRaw, fallbackName) {
               <div style="border:1px solid #e5e7eb; border-radius:14px; padding:10px;">
                 <div style="font-weight:700; margin-bottom:6px;">콘크리트</div>
                 <div style="display:flex; gap:8px; align-items:center;">
-                  <input
-                    id="costConcreteM3"
-                    data-cost-field="concreteM3"
-                    type="number"
-                    inputmode="decimal"
-                    min="0"
-                    step="1"
-                    placeholder="예: 850"
-                    value="${esc(costState.concreteM3)}"
-                    style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;"
-                  />
+                  <input id="costConcreteM3" data-cost-field="concreteM3" type="number" inputmode="decimal" min="0" step="1"
+                    placeholder="예: 850" value="${esc(costState.concreteM3)}"
+                    style="flex:1; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;" />
                   <span class="muted">m³</span>
                 </div>
               </div>
@@ -543,11 +557,8 @@ function renderPanel(isoRaw, fallbackName) {
 
             <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
               <div style="font-weight:700;">기준 연도/분기</div>
-              <select
-                id="costPeriod"
-                data-cost-field="period"
-                style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;"
-              >
+              <select id="costPeriod" data-cost-field="period"
+                style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
                 ${
                   costSeries.map(r => {
                     const p = String(r.period || "");
@@ -574,76 +585,27 @@ function renderPanel(isoRaw, fallbackName) {
   if (view === "cost") queueMicrotask(() => updateCostResult());
 }
 
-/* =========================
-   URL candidates for GitHub Pages
-   - project page: https://<user>.github.io/<repo>/
-   - root data: /<repo>/data/...
-========================= */
-function buildRepoBase() {
-  // "/icak-country-portal/" 같은 형태를 얻고 싶음
-  const parts = location.pathname.split("/").filter(Boolean);
-  // project page일 경우: [ "icak-country-portal", ... ]
-  // user page일 경우: []
-  const repo = parts.length ? parts[0] : "";
-  return repo ? `/${repo}` : "";
-}
-
-function buildDataURLs() {
-  const base = buildRepoBase();
-
-  // 네가 실제로 확인한 URL을 최우선으로 넣음
-  const abs1 = `${base}/data/countrydata.json`;
-  const abs2 = `${base}/data/countryData.json`;
-
-  return [
-    abs1,
-    abs2,
-
-    // 상대경로 fallback
-    "./data/countrydata.json",
-    "./data/countryData.json",
-    "./countrydata.json",
-    "./countryData.json",
-
-    // (혹시 docs 폴더 구조로 올렸을 경우)
-    `${base}/docs/data/countrydata.json`,
-    `${base}/docs/data/countryData.json`,
-    "./docs/data/countrydata.json",
-    "./docs/data/countryData.json",
-  ];
-}
-
-function buildGeoJSONURLs() {
-  const base = buildRepoBase();
-
-  return [
-    `${base}/data/countries.geojson`,
-    "./data/countries.geojson",
-    `${base}/countries.geojson`,
-    "./countries.geojson",
-
-    // docs fallback
-    `${base}/docs/data/countries.geojson`,
-    "./docs/data/countries.geojson",
-  ];
-}
-
 // ===== Init =====
 async function init() {
   setInfo("국가를 선택하세요", `<div class="muted">지도를 클릭하면 아래에 정보가 표시됩니다.</div>`);
 
-  // 1) countrydata 로드
+  // countryData 로드 + 로그 + 실패시 UI 표시
   try {
-    const DATA_URLS = buildDataURLs();
     const { json, url } = await fetchJsonFirstOk(DATA_URLS, "countrydata.json");
     countryData = json || {};
-    console.log("[countrydata] loaded:", url, "keys:", Object.keys(countryData));
+    console.log("[countryData] loaded:", url, "keys:", Object.keys(countryData));
   } catch (e) {
     countryData = {};
-    console.warn("[countrydata] load failed:", e);
+    console.warn("[countryData] load failed:", e);
+
+    setInfo("오류", `
+      <div class="muted">데이터 파일을 불러오지 못했습니다.</div>
+      <div class="muted">시도한 경로(일부):</div>
+      <pre style="white-space:pre-wrap; font-size:12px; background:#f9fafb; border:1px solid #e5e7eb; padding:10px; border-radius:12px;">${esc(DATA_URLS.slice(0, 12).join("\n"))}</pre>
+      <div class="muted">브라우저 개발자도구(F12) → Network에서 countrydata.json 요청이 200인지 확인하세요.</div>
+    `);
   }
 
-  // 2) 지도 생성
   map = new maplibregl.Map({
     container: "map",
     style: MAP_STYLE,
@@ -654,8 +616,9 @@ async function init() {
 
   map.on("load", async () => {
     try {
-      const GEOJSON_URLS = buildGeoJSONURLs();
-      const { json } = await fetchJsonFirstOk(GEOJSON_URLS, "countries.geojson");
+      const { json, url } = await fetchJsonFirstOk(GEOJSON_URLS, "countries.geojson");
+      console.log("[geojson] loaded:", url);
+
       countriesGeo = preprocessCountriesGeo(json);
 
       map.addSource("countries", { type: "geojson", data: countriesGeo });
@@ -717,8 +680,8 @@ async function init() {
         renderPanel(isoRaw, name);
       });
     } catch (e) {
+      console.warn("[geojson] load failed:", e);
       setInfo("오류", `<div class="muted">지도 데이터를 불러오지 못했습니다.</div>`);
-      console.error(e);
     }
   });
 
