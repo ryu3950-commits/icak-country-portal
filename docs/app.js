@@ -605,13 +605,19 @@ async function init() {
       <div class="muted">브라우저 개발자도구(F12) → Network에서 countrydata.json 요청이 200인지 확인하세요.</div>
     `);
   }
+map = new maplibregl.Map({
+  container: "map",
+  style: MAP_STYLE,
 
-  map = new maplibregl.Map({
-    container: "map",
-    style: MAP_STYLE,
-    center: [20, 20],
-    zoom: 1.4,
-  });
+  // ✅ Middle East start view (UAE 중심)
+  center: [54.37, 24.45],   // Abu Dhabi 근처 (경도, 위도)
+  zoom: 4.2,                // 3.8~5.0 사이 취향대로
+
+  // (선택) tilt 없게
+  pitch: 0,
+  bearing: 0
+});
+
   map.addControl(new maplibregl.NavigationControl(), "top-right");
 
   map.on("load", async () => {
@@ -782,3 +788,4 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
