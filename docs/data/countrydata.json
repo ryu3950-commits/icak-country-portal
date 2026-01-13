@@ -2,109 +2,123 @@
   "ARE": {
     "name": "아랍에미리트(UAE)",
     "updated": "2026-01-12",
+
     "materials": [
-      { "item": "원유 (Brent)", "price": 63.39, "unit": "$/bbl", "asOf": "2026-01-12", "source": "Reuters" },
-      { "item": "LNG (JKM)", "price": 9.565, "unit": "$/MMBtu", "asOf": "2026-01-09", "source": "Investing.com" },
-      { "item": "구리 (LME Cash)", "price": 13060, "unit": "$/t", "asOf": "2026-01-09", "source": "Westmetall (LME)" },
-      { "item": "알루미늄", "price": 3163.5, "unit": "$/t", "asOf": "2026-01-12", "source": "TradingEconomics" },
-      { "item": "철근 (UAE, Emirates Steel EXW)", "price": 721, "unit": "$/t", "asOf": "2026-01", "source": "AISU(Emirates Steel) AED 2,648/t ≈ USD 721/t" },
-      { "item": "시멘트 (UAE, OPC 50kg bag → 환산)", "price": 71.6, "unit": "$/t", "asOf": "2024-Q4 avg", "source": "Stonehaven(두바이) AED 13.13/bag(50kg) 기준 환산" }
+      { "key": "brent", "item": "원유 (Brent)", "unit": "USD/bbl" },
+      { "key": "lng", "item": "LNG (JKM)", "unit": "USD/MMBtu" },
+      { "key": "copper", "item": "구리 (LME Cash)", "unit": "USD/t" },
+      { "key": "aluminium", "item": "알루미늄", "unit": "USD/t" },
+      { "key": "rebar", "item": "철근 (UAE, Emirates Steel EXW)", "unit": "USD/t" },
+      { "key": "cement", "item": "시멘트 (UAE, OPC 50kg bag → 환산)", "unit": "USD/t" }
     ],
+
+    "materialsQuarterly": {
+      "currency": "USD",
+      "units": {
+        "brent": "USD/bbl",
+        "lng": "USD/MMBtu",
+        "copper": "USD/t",
+        "aluminium": "USD/t",
+        "rebar": "USD/t",
+        "cement": "USD/t"
+      },
+      "note": "데모용 분기 단가(대략). 2021~2022 상승, 2023 조정, 2025~2026 완만한 회복 흐름 샘플.",
+      "series": [
+        { "period": "2020Q1", "brent": 50.0, "lng": 4.2, "copper": 5800, "aluminium": 1750, "rebar": 420, "cement": 60.0 },
+        { "period": "2020Q2", "brent": 35.0, "lng": 2.7, "copper": 5400, "aluminium": 1600, "rebar": 410, "cement": 59.0 },
+        { "period": "2020Q3", "brent": 43.0, "lng": 3.1, "copper": 5900, "aluminium": 1700, "rebar": 415, "cement": 59.5 },
+        { "period": "2020Q4", "brent": 49.0, "lng": 4.0, "copper": 6200, "aluminium": 1800, "rebar": 430, "cement": 60.5 },
+
+        { "period": "2021Q1", "brent": 60.0, "lng": 6.0, "copper": 7200, "aluminium": 2000, "rebar": 460, "cement": 63.0 },
+        { "period": "2021Q2", "brent": 68.0, "lng": 8.0, "copper": 9200, "aluminium": 2450, "rebar": 520, "cement": 66.0 },
+        { "period": "2021Q3", "brent": 73.0, "lng": 12.0, "copper": 9500, "aluminium": 2650, "rebar": 590, "cement": 70.0 },
+        { "period": "2021Q4", "brent": 77.0, "lng": 14.0, "copper": 9600, "aluminium": 2750, "rebar": 650, "cement": 73.0 },
+
+        { "period": "2022Q1", "brent": 95.0, "lng": 25.0, "copper": 9800, "aluminium": 3200, "rebar": 720, "cement": 78.0 },
+        { "period": "2022Q2", "brent": 110.0, "lng": 35.0, "copper": 9300, "aluminium": 3300, "rebar": 780, "cement": 82.0 },
+        { "period": "2022Q3", "brent": 95.0, "lng": 30.0, "copper": 7800, "aluminium": 2500, "rebar": 730, "cement": 80.0 },
+        { "period": "2022Q4", "brent": 85.0, "lng": 26.0, "copper": 7900, "aluminium": 2400, "rebar": 690, "cement": 77.0 },
+
+        { "period": "2023Q1", "brent": 82.0, "lng": 18.0, "copper": 8900, "aluminium": 2450, "rebar": 660, "cement": 74.0 },
+        { "period": "2023Q2", "brent": 76.0, "lng": 12.0, "copper": 8300, "aluminium": 2300, "rebar": 640, "cement": 72.5 },
+        { "period": "2023Q3", "brent": 85.0, "lng": 13.0, "copper": 8200, "aluminium": 2250, "rebar": 620, "cement": 71.0 },
+        { "period": "2023Q4", "brent": 80.0, "lng": 14.0, "copper": 8400, "aluminium": 2350, "rebar": 610, "cement": 70.5 },
+
+        { "period": "2024Q1", "brent": 78.0, "lng": 10.0, "copper": 8700, "aluminium": 2400, "rebar": 600, "cement": 69.5 },
+        { "period": "2024Q2", "brent": 82.0, "lng": 10.5, "copper": 9200, "aluminium": 2500, "rebar": 610, "cement": 70.0 },
+        { "period": "2024Q3", "brent": 85.0, "lng": 11.0, "copper": 9600, "aluminium": 2600, "rebar": 625, "cement": 70.5 },
+        { "period": "2024Q4", "brent": 83.0, "lng": 12.0, "copper": 9800, "aluminium": 2700, "rebar": 640, "cement": 71.0 },
+
+        { "period": "2025Q1", "brent": 80.0, "lng": 11.5, "copper": 9500, "aluminium": 2650, "rebar": 660, "cement": 71.5 },
+        { "period": "2025Q2", "brent": 78.0, "lng": 10.8, "copper": 9800, "aluminium": 2750, "rebar": 690, "cement": 72.0 },
+        { "period": "2025Q3", "brent": 79.0, "lng": 10.2, "copper": 10200, "aluminium": 2850, "rebar": 710, "cement": 72.5 },
+        { "period": "2025Q4", "brent": 81.0, "lng": 9.9, "copper": 10800, "aluminium": 3000, "rebar": 730, "cement": 73.0 },
+
+        { "period": "2026Q1", "brent": 63.4, "lng": 9.6, "copper": 13060, "aluminium": 3163.5, "rebar": 721, "cement": 71.6 }
+      ]
+    },
+
     "labor": [
       { "role": "비숙련(일급)", "wage": 55, "unit": "USD/day" },
       { "role": "숙련(일급)", "wage": 95, "unit": "USD/day" }
     ],
+
     "ppp": {
       "lawUrl": "https://uaelegislation.gov.ae/en/legislations/2189/download",
       "statusUrl": "https://www.dof.gov.ae/en-us/ppp/Pages/PPP_Projects.aspx"
     },
+
     "nonWorkDays": [
-      { "month": "1월", "avgTemp": 19.4, "avgHighLow": "23.4/15.0", "storm": 0.49, "weekend": 9, "holidayWeekday": 1, "fixedOff": 10, "eqOff8h": 10.2, "note": "모래폭풍/샤말 빈도↑" },
-      { "month": "2월", "avgTemp": 20.5, "avgHighLow": "25.0/15.7", "storm": 0.58, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 10.2, "note": "라마단(-2h/일), 모래폭풍/샤말 빈도↑" },
-      { "month": "3월", "avgTemp": 23.1, "avgHighLow": "28.2/17.9", "storm": 0.58, "weekend": 9, "holidayWeekday": 1, "fixedOff": 10, "eqOff8h": 13.7, "note": "라마단(-2h/일), 모래폭풍/샤말 빈도↑" },
-      { "month": "4월", "avgTemp": 27.3, "avgHighLow": "32.8/21.5", "storm": 0.35, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 8.1, "note": "-" },
-      { "month": "5월", "avgTemp": 31.3, "avgHighLow": "36.9/25.2", "storm": 0.15, "weekend": 10, "holidayWeekday": 4, "fixedOff": 14, "eqOff8h": 14.1, "note": "-" },
-      { "month": "6월", "avgTemp": 33.0, "avgHighLow": "38.5/27.3", "storm": 0.09, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 11.8, "note": "혹서기 한낮작업금지(12:30-15:00)" },
-      { "month": "7월", "avgTemp": 34.9, "avgHighLow": "40.0/29.6", "storm": 0.09, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 15.2, "note": "혹서기 한낮작업금지(12:30-15:00)" },
-      { "month": "8월", "avgTemp": 35.3, "avgHighLow": "40.7/30.0", "storm": 0.09, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 16.6, "note": "혹서기 한낮작업금지(12:30-15:00)" },
-      { "month": "9월", "avgTemp": 33.0, "avgHighLow": "38.4/27.8", "storm": 0.09, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 11.5, "note": "혹서기 한낮작업금지(12:30-15:00)" },
-      { "month": "10월", "avgTemp": 30.0, "avgHighLow": "35.0/24.7", "storm": 0.15, "weekend": 9, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 9.1, "note": "-" },
-      { "month": "11월", "avgTemp": 25.7, "avgHighLow": "29.9/21.1", "storm": 0.15, "weekend": 9, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 9.1, "note": "-" },
-      { "month": "12월", "avgTemp": 21.5, "avgHighLow": "25.5/17.3", "storm": 0.41, "weekend": 8, "holidayWeekday": 2, "fixedOff": 10, "eqOff8h": 10.2, "note": "모래폭풍/샤말 빈도↑" }
-    ],
-    "constructionCost": {
-      "currency": "USD",
-      "units": { "rebar": "USD/t", "concrete": "USD/m3" },
-      "note": "데모용 분기 단가(대략). 2021~2022 상승, 2023 조정, 2025~2026 완만한 회복 흐름을 반영한 샘플.",
-      "series": [
-        { "period": "2020Q1", "rebar_usd_per_t": 420, "concrete_usd_per_m3": 75 },
-        { "period": "2020Q2", "rebar_usd_per_t": 410, "concrete_usd_per_m3": 74 },
-        { "period": "2020Q3", "rebar_usd_per_t": 415, "concrete_usd_per_m3": 74 },
-        { "period": "2020Q4", "rebar_usd_per_t": 430, "concrete_usd_per_m3": 75 },
-
-        { "period": "2021Q1", "rebar_usd_per_t": 460, "concrete_usd_per_m3": 78 },
-        { "period": "2021Q2", "rebar_usd_per_t": 520, "concrete_usd_per_m3": 82 },
-        { "period": "2021Q3", "rebar_usd_per_t": 590, "concrete_usd_per_m3": 88 },
-        { "period": "2021Q4", "rebar_usd_per_t": 650, "concrete_usd_per_m3": 92 },
-
-        { "period": "2022Q1", "rebar_usd_per_t": 720, "concrete_usd_per_m3": 98 },
-        { "period": "2022Q2", "rebar_usd_per_t": 780, "concrete_usd_per_m3": 105 },
-        { "period": "2022Q3", "rebar_usd_per_t": 730, "concrete_usd_per_m3": 103 },
-        { "period": "2022Q4", "rebar_usd_per_t": 690, "concrete_usd_per_m3": 100 },
-
-        { "period": "2023Q1", "rebar_usd_per_t": 660, "concrete_usd_per_m3": 96 },
-        { "period": "2023Q2", "rebar_usd_per_t": 640, "concrete_usd_per_m3": 94 },
-        { "period": "2023Q3", "rebar_usd_per_t": 620, "concrete_usd_per_m3": 92 },
-        { "period": "2023Q4", "rebar_usd_per_t": 610, "concrete_usd_per_m3": 91 },
-
-        { "period": "2024Q1", "rebar_usd_per_t": 600, "concrete_usd_per_m3": 90 },
-        { "period": "2024Q2", "rebar_usd_per_t": 610, "concrete_usd_per_m3": 91 },
-        { "period": "2024Q3", "rebar_usd_per_t": 625, "concrete_usd_per_m3": 92 },
-        { "period": "2024Q4", "rebar_usd_per_t": 640, "concrete_usd_per_m3": 94 },
-
-        { "period": "2025Q1", "rebar_usd_per_t": 660, "concrete_usd_per_m3": 96 },
-        { "period": "2025Q2", "rebar_usd_per_t": 690, "concrete_usd_per_m3": 99 },
-        { "period": "2025Q3", "rebar_usd_per_t": 710, "concrete_usd_per_m3": 101 },
-        { "period": "2025Q4", "rebar_usd_per_t": 730, "concrete_usd_per_m3": 103 },
-
-        { "period": "2026Q1", "rebar_usd_per_t": 720, "concrete_usd_per_m3": 102 }
-      ]
-    }
+      { "month": "1월", "avgTemp": 19.4, "avgHighLow": "23.4/15.0", "storm": 0.49, "weekend": 9, "holidayWeekday": 1, "fixedOff": 10, "eqOff8h": 10.2, "note": "모래폭풍/샤말 빈도↑" }
+    ]
   },
 
   "VNM": {
     "name": "베트남(Vietnam)",
     "updated": "2026-01-12",
+
     "materials": [
-      { "item": "원유 (Brent)", "price": 63.39, "unit": "$/bbl", "asOf": "2026-01-12", "source": "Reuters" },
-      { "item": "LNG (JKM)", "price": 9.565, "unit": "$/MMBtu", "asOf": "2026-01-09", "source": "Investing.com" },
-      { "item": "구리 (LME Cash)", "price": 13060, "unit": "$/t", "asOf": "2026-01-09", "source": "Westmetall (LME)" },
-      { "item": "알루미늄", "price": 3163.5, "unit": "$/t", "asOf": "2026-01-12", "source": "TradingEconomics" },
-      { "item": "철근 (VNM, D10 CB300)", "price": 498.3, "unit": "$/t", "asOf": "2025-10-26(가격) / 2026-01-12(FX)", "source": "SteelOnline: 13,090 VND/kg + USD/VND 26,275 환산" },
-      { "item": "시멘트 (VNM, bag 50kg 기준)", "price": 59.8, "unit": "$/t", "asOf": "2025-12-29(가격) / 2026-01-12(FX)", "source": "Baomoi: 1.44~1.70M VND/t + USD/VND 26,275 환산" }
+      { "key": "brent", "item": "원유 (Brent)", "unit": "USD/bbl" },
+      { "key": "lng", "item": "LNG (JKM)", "unit": "USD/MMBtu" },
+      { "key": "copper", "item": "구리 (LME Cash)", "unit": "USD/t" },
+      { "key": "aluminium", "item": "알루미늄", "unit": "USD/t" },
+      { "key": "rebar", "item": "철근 (VNM, D10 CB300)", "unit": "USD/t" },
+      { "key": "cement", "item": "시멘트 (VNM, bag 50kg 기준)", "unit": "USD/t" }
     ],
+
+    "materialsQuarterly": {
+      "currency": "USD",
+      "units": {
+        "brent": "USD/bbl",
+        "lng": "USD/MMBtu",
+        "copper": "USD/t",
+        "aluminium": "USD/t",
+        "rebar": "USD/t",
+        "cement": "USD/t"
+      },
+      "note": "베트남도 글로벌 코모디티는 비슷하게 움직인다는 가정 + 철근/시멘트는 약간 다른 레벨로 샘플링.",
+      "series": [
+        { "period": "2020Q1", "brent": 50.0, "lng": 4.2, "copper": 5800, "aluminium": 1750, "rebar": 380, "cement": 52.0 },
+        { "period": "2020Q2", "brent": 35.0, "lng": 2.7, "copper": 5400, "aluminium": 1600, "rebar": 370, "cement": 51.0 },
+        { "period": "2021Q4", "brent": 77.0, "lng": 14.0, "copper": 9600, "aluminium": 2750, "rebar": 610, "cement": 58.0 },
+        { "period": "2022Q2", "brent": 110.0, "lng": 35.0, "copper": 9300, "aluminium": 3300, "rebar": 700, "cement": 64.0 },
+        { "period": "2023Q4", "brent": 80.0, "lng": 14.0, "copper": 8400, "aluminium": 2350, "rebar": 560, "cement": 60.0 },
+        { "period": "2026Q1", "brent": 63.4, "lng": 9.6, "copper": 13060, "aluminium": 3163.5, "rebar": 498.3, "cement": 59.8 }
+      ]
+    },
+
     "labor": [
       { "role": "비숙련(일급)", "wage": 18, "unit": "USD/day" },
       { "role": "숙련(일급)", "wage": 35, "unit": "USD/day" }
     ],
+
     "ppp": {
       "lawUrl": "https://english.luatvietnam.vn/law-on-investment-in-the-form-of-public-private-partnership-no-64-2020-qh14-dated-june-18-2020-of-the-national-assembly-186267-doc1.html",
       "statusUrl": "https://fpt-is.com/en/new-e-government-procurement-system-officially-comes-into-operation-on-september-16/"
     },
+
     "nonWorkDays": [
-      { "month": "1월", "avgTemp": 26.1, "avgHighLow": "30.8/22.2", "rainDays": 0.9, "weekend": 9, "holidayWeekday": 2, "fixedOff": 11, "eqOff8h": 11.1, "note": "공휴일(평일)" },
-      { "month": "2월", "avgTemp": 27.1, "avgHighLow": "32.5/22.9", "rainDays": 0.6, "weekend": 8, "holidayWeekday": 5, "fixedOff": 13, "eqOff8h": 13.1, "note": "공휴일(평일)" },
-      { "month": "3월", "avgTemp": 28.3, "avgHighLow": "33.6/24.5", "rainDays": 1.6, "weekend": 9, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 9.2, "note": "-" },
-      { "month": "4월", "avgTemp": 28.9, "avgHighLow": "33.8/25.6", "rainDays": 4.3, "weekend": 8, "holidayWeekday": 2, "fixedOff": 10, "eqOff8h": 10.6, "note": "공휴일(평일)" },
-      { "month": "5월", "avgTemp": 28.1, "avgHighLow": "32.3/25.5", "rainDays": 11.7, "weekend": 10, "holidayWeekday": 1, "fixedOff": 11, "eqOff8h": 12.8, "note": "공휴일(평일), 우기(강우일↑)" },
-      { "month": "6월", "avgTemp": 27.1, "avgHighLow": "30.9/24.9", "rainDays": 15.9, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 10.4, "note": "우기(강우일↑)" },
-      { "month": "7월", "avgTemp": 26.8, "avgHighLow": "30.5/24.6", "rainDays": 16.7, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 10.5, "note": "우기(강우일↑)" },
-      { "month": "8월", "avgTemp": 26.7, "avgHighLow": "30.5/24.4", "rainDays": 15.7, "weekend": 10, "holidayWeekday": 1, "fixedOff": 11, "eqOff8h": 13.4, "note": "공휴일(평일), 우기(강우일↑)" },
-      { "month": "9월", "avgTemp": 26.5, "avgHighLow": "30.4/24.2", "rainDays": 16.6, "weekend": 8, "holidayWeekday": 2, "fixedOff": 10, "eqOff8h": 12.5, "note": "공휴일(평일), 우기(강우일↑)" },
-      { "month": "10월", "avgTemp": 26.3, "avgHighLow": "30.1/23.9", "rainDays": 16.5, "weekend": 9, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 11.5, "note": "우기(강우일↑)" },
-      { "month": "11월", "avgTemp": 26.3, "avgHighLow": "30.1/23.5", "rainDays": 8.4, "weekend": 9, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 10.3, "note": "-" },
-      { "month": "12월", "avgTemp": 26.0, "avgHighLow": "30.2/22.6", "rainDays": 2.9, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 8.4, "note": "-" }
+      { "month": "1월", "avgTemp": 26.1, "avgHighLow": "30.8/22.2", "rainDays": 0.9, "weekend": 9, "holidayWeekday": 2, "fixedOff": 11, "eqOff8h": 11.1, "note": "공휴일(평일)" }
     ]
   }
 }
-
