@@ -1,13 +1,12 @@
 /* =========================
    styles.css (Full)
-   - 첫 화면에서 지도↓ / 아래(자재비·비작업일수)↑
-   - 아래 패널 내부 스크롤 없음(브라우저 전체 스크롤 1개만)
-   - 사이드바 기본은 흰색 + active도 검정 안 되게(요청 반영)
+   - 사이드바 제거(1컬럼)
+   - 지도 위, 정보 패널 아래
 ========================= */
 
-/* Base reset */
 * { box-sizing: border-box; }
 html, body { height: auto; }
+
 body{
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", Arial, sans-serif;
@@ -15,66 +14,17 @@ body{
   color: #111827;
 }
 
-/* Layout */
 .app{
-  display: grid;
-  grid-template-columns: 260px 1fr;
+  display: block;
   min-height: 100vh;
-  height: auto;              /* ✅ 고정 높이 금지 */
 }
 
-/* ===== Sidebar (White) ===== */
-.sidebar{
-  background: #ffffff !important;
-  color: #111827 !important;
-  padding: 16px 14px;
-  border-right: 1px solid #e5e7eb;
-}
-
-.menu{
-  display:flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.menu-item{
-  width: 100%;
-  display:flex;
-  justify-content: space-between;
-  align-items:center;
-
-  border: 1px solid #e5e7eb !important;
-  background: #ffffff !important;
-  color: #111827 !important;
-
-  padding: 12px 12px;
-  border-radius: 14px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.menu-item:hover{ background: #f9fafb !important; }
-
-/* ✅ 요청: "지역별"만 검정으로 보이는 active 제거(선택되어도 흰색 유지) */
-.menu-item.active{
-  background: #ffffff !important;
-  color: #111827 !important;
-  border-color: #e5e7eb !important;
-}
-
-.menu-item .plus{
-  opacity:.8;
-  font-weight: 700;
-  color: currentColor !important;
-}
-
-/* Main */
 .main{
   display:flex;
   flex-direction: column;
   min-width: 0;
-  height: auto;              /* ✅ 고정 높이 금지 */
-  overflow: visible;         /* ✅ 내부 스크롤 금지 */
+  height: auto;
+  overflow: visible;
 }
 
 /* Header */
@@ -145,28 +95,15 @@ body{
 }
 .icon-btn:hover{ background: rgba(17,24,39,.08); }
 
-.advanced-btn{
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: #111827;
-  padding: 10px 12px;
-  border-radius: 14px;
-  cursor:pointer;
-  font-size: 14px;
-  white-space: nowrap;
-}
-.advanced-btn:hover{ background: #f9fafb; }
-
 /* Map area */
 .map-wrap{
-  padding: 10px 18px 0;  /* 살짝 줄여서 아래 패널이 더 보이게 */
+  padding: 10px 18px 0;
   background: #f5f6f8;
 }
 
-/* ✅ 첫 화면에서 아래 패널이 더 보이도록 지도 높이 축소 */
 #map{
   width: 100%;
-  height: 55vh;        /* 70vh → 55vh (원하면 52~58 사이) */
+  height: 55vh;
   min-height: 420px;
   border-radius: 18px;
   overflow: hidden;
@@ -174,7 +111,7 @@ body{
   background: #e5e7eb;
 }
 
-/* Info panel (below map) */
+/* Info panel */
 .info{
   background: #fff;
   margin: 10px 18px 18px;
@@ -182,12 +119,12 @@ body{
   border-radius: 18px;
   padding: 14px 18px 18px;
 
-  height: auto !important;       /* ✅ 내부 스크롤 방지 */
-  overflow: visible !important;  /* ✅ 브라우저 전체 스크롤만 */
-  min-height: 40vh;              /* ✅ 첫 화면에서 지금보다 더 크게(약 2배 느낌) */
+  height: auto !important;
+  overflow: visible !important;
+  min-height: 40vh;
+  box-shadow: 0 -6px 18px rgba(0,0,0,.06);
 }
 
-/* Title/Body */
 #infoTitle{
   margin: 0;
   font-size: 18px;
@@ -203,7 +140,6 @@ body{
   margin-bottom: 10px;
 }
 
-/* Tables */
 .table{
   width: 100%;
   border-collapse: collapse;
@@ -233,7 +169,6 @@ body{
 .table tbody tr:last-child td{ border-bottom: none; }
 .right{ text-align: right; }
 
-/* PPP buttons row */
 .btnrow{
   display:flex;
   gap: 10px;
@@ -256,29 +191,7 @@ body{
 }
 .btn:hover{ background: #f9fafb; }
 
-/* ✅ "밑에 정보 살짝 보이게" 느낌: 여백/그림자만 가볍게 */
-.info{
-  box-shadow: 0 -6px 18px rgba(0,0,0,.06);
-}
-
-/* Responsive */
 @media (max-width: 920px){
-  .app{ grid-template-columns: 1fr; }
-  .sidebar{ order: 2; }
-  .main{ order: 1; }
-
-  .search-wrap{
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  #map{
-    height: 48vh;
-    min-height: 340px;
-  }
-
-  .info{
-    min-height: 48vh;
-  }
+  #map{ height: 48vh; min-height: 340px; }
+  .info{ min-height: 48vh; }
 }
-
