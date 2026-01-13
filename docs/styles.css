@@ -1,4 +1,11 @@
+/* =========================
+   styles.css (Full)
+   - 첫 화면에서 지도↓ / 아래(자재비·비작업일수)↑
+   - 아래 패널 내부 스크롤 없음(브라우저 전체 스크롤 1개만)
+   - 사이드바 기본은 흰색 + active도 검정 안 되게(요청 반영)
+========================= */
 
+/* Base reset */
 * { box-sizing: border-box; }
 html, body { height: auto; }
 body{
@@ -13,13 +20,13 @@ body{
   display: grid;
   grid-template-columns: 260px 1fr;
   min-height: 100vh;
-  height: auto;
+  height: auto;              /* ✅ 고정 높이 금지 */
 }
 
-/* ===== Sidebar (WHITE) ===== */
+/* ===== Sidebar (White) ===== */
 .sidebar{
-  background: #ffffff;
-  color: #111827;
+  background: #ffffff !important;
+  color: #111827 !important;
   padding: 16px 14px;
   border-right: 1px solid #e5e7eb;
 }
@@ -36,9 +43,9 @@ body{
   justify-content: space-between;
   align-items:center;
 
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
-  color: #111827;
+  border: 1px solid #e5e7eb !important;
+  background: #ffffff !important;
+  color: #111827 !important;
 
   padding: 12px 12px;
   border-radius: 14px;
@@ -46,18 +53,19 @@ body{
   font-size: 14px;
 }
 
-.menu-item:hover{ background: #f9fafb; }
+.menu-item:hover{ background: #f9fafb !important; }
 
-/* ✅ active도 검정색으로 안 바뀌게: 그냥 일반 상태와 동일 + 테두리만 살짝 강조 */
+/* ✅ 요청: "지역별"만 검정으로 보이는 active 제거(선택되어도 흰색 유지) */
 .menu-item.active{
-  background: #ffffff;
-  color: #111827;
-  border-color: #d1d5db;
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-color: #e5e7eb !important;
 }
 
 .menu-item .plus{
-  opacity:.7;
+  opacity:.8;
   font-weight: 700;
+  color: currentColor !important;
 }
 
 /* Main */
@@ -65,8 +73,8 @@ body{
   display:flex;
   flex-direction: column;
   min-width: 0;
-  height: auto;
-  overflow: visible; /* 내부 스크롤 금지 */
+  height: auto;              /* ✅ 고정 높이 금지 */
+  overflow: visible;         /* ✅ 내부 스크롤 금지 */
 }
 
 /* Header */
@@ -135,10 +143,7 @@ body{
   padding: 4px 6px;
   border-radius: 10px;
 }
-
-.icon-btn:hover{
-  background: rgba(17,24,39,.08);
-}
+.icon-btn:hover{ background: rgba(17,24,39,.08); }
 
 .advanced-btn{
   border: 1px solid #e5e7eb;
@@ -150,30 +155,26 @@ body{
   font-size: 14px;
   white-space: nowrap;
 }
-
-.advanced-btn:hover{
-  background: #f9fafb;
-}
+.advanced-btn:hover{ background: #f9fafb; }
 
 /* Map area */
 .map-wrap{
-  padding: 12px 18px 0;
+  padding: 10px 18px 0;  /* 살짝 줄여서 아래 패널이 더 보이게 */
   background: #f5f6f8;
 }
 
-/* ✅ 지도 크기: 항상 유지 (원하면 70vh 유지 / 더 키우면 75vh) */
+/* ✅ 첫 화면에서 아래 패널이 더 보이도록 지도 높이 축소 */
 #map{
   width: 100%;
-  height: 70vh;
-  min-height: 520px;
+  height: 55vh;        /* 70vh → 55vh (원하면 52~58 사이) */
+  min-height: 420px;
   border-radius: 18px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
   background: #e5e7eb;
 }
 
-/* ===== Info panel (below map) ===== */
-/* ✅ 첫 화면에서 지금보다 2배 크게: 25vh -> 50vh */
+/* Info panel (below map) */
 .info{
   background: #fff;
   margin: 10px 18px 18px;
@@ -181,16 +182,12 @@ body{
   border-radius: 18px;
   padding: 14px 18px 18px;
 
-  height: 50vh;        /* ✅ 2배 */
-  overflow-y: auto;    /* 표가 길면 여기만 스크롤 */
+  height: auto !important;       /* ✅ 내부 스크롤 방지 */
+  overflow: visible !important;  /* ✅ 브라우저 전체 스크롤만 */
+  min-height: 40vh;              /* ✅ 첫 화면에서 지금보다 더 크게(약 2배 느낌) */
 }
 
-/* “살짝 위로 올려서(위쪽이 조금 보이게)” 느낌: margin-top을 줄여줌 */
-.info{
-  margin-top: 8px;
-}
-
-/* 타이틀/바디 */
+/* Title/Body */
 #infoTitle{
   margin: 0;
   font-size: 18px;
@@ -198,11 +195,8 @@ body{
   color: #111827;
 }
 
-#infoBody{
-  margin-top: 10px;
-}
+#infoBody{ margin-top: 10px; }
 
-/* Generic */
 .muted{
   color: #6b7280;
   font-size: 13px;
@@ -236,10 +230,7 @@ body{
   vertical-align: top;
 }
 
-.table tbody tr:last-child td{
-  border-bottom: none;
-}
-
+.table tbody tr:last-child td{ border-bottom: none; }
 .right{ text-align: right; }
 
 /* PPP buttons row */
@@ -263,8 +254,12 @@ body{
   cursor:pointer;
   font-size: 14px;
 }
-
 .btn:hover{ background: #f9fafb; }
+
+/* ✅ "밑에 정보 살짝 보이게" 느낌: 여백/그림자만 가볍게 */
+.info{
+  box-shadow: 0 -6px 18px rgba(0,0,0,.06);
+}
 
 /* Responsive */
 @media (max-width: 920px){
@@ -278,11 +273,11 @@ body{
   }
 
   #map{
-    height: 60vh;
-    min-height: 420px;
+    height: 48vh;
+    min-height: 340px;
   }
 
   .info{
-    height: 55vh; /* 모바일은 조금 더 크게 */
+    min-height: 48vh;
   }
 }
