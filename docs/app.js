@@ -1,7 +1,8 @@
-// app.js (Fix + 공사기간 계산 탭 추가)
-// - 비작업일수 옆에 "공사기간 계산" 버튼/탭 추가
-// - 비작업일수(eqOff8h/fixedOff) 기반 월별 유효 작업일 -> 예상 공사기간 계산
-// - 탭 클릭/CSV 클릭 안되던 부분은 "infoBody 안의 버튼"을 이벤트 위임으로 처리
+// app.js (Fix v2)
+// ✅ 버튼 클릭 안되는 원인(advancedBtn null) 방지
+// ✅ 공사원가/자재비계산 단가를 materialsQuarterly.series에서 읽도록 수정
+// ✅ 분기는 YYYYQ#만 허용
+// ✅ 시작화면 중동 확대
 
 const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
 
@@ -27,12 +28,14 @@ const DATA_URLS = [
   u("./docs/data/countryData.json"),
 ];
 
+// DOM (null 가능성 대비)
 const infoTitle = document.getElementById("infoTitle");
 const infoBody = document.getElementById("infoBody");
 
 const searchInput = document.getElementById("searchInput");
 const clearBtn = document.getElementById("clearBtn");
 const searchBtn = document.getElementById("searchBtn");
+// HTML에 없을 수 있음(= 여기서 죽으면 전체 클릭이 안 됨)
 const advancedBtn = document.getElementById("advancedBtn");
 
 let map;
@@ -44,11 +47,13 @@ let selectedIsoRaw = "UNK";
 let selectedFID = null;
 let selectedName = null;
 
-let view = "costs"; // costs | matcalc | laborcalc | nonwork | schedule
+let view = "costs"; // costs | matcalc | laborcalc | nonwork
+
+// 공사원가/자재비계산 공통 분기 상태(같이 쓰는 게 편함)
+let periodState = { period: "" };
 
 // 자재비 계산 상태
 let matCalcState = {
-  period: "",
   qty: {
     brent_bbl: "",
     lng_mmbtu: "",
@@ -57,27 +62,6 @@ let matCalcState = {
     rebar_t: "",
     cement_t: "",
   }
-};
-
-// 인건비 계산 탭(지금은 “표시만” 쓰는 상태 — 너가 원하면 나중에 로봇 비교도 다시 붙이면 됨)
-let laborCalcState = {
-  year: new Date().getFullYear(),
-  uaeDailyUSD: "",
-  korDailyUSD: "",
-  applyRamadan: true,
-  applyPrayerLoss: true,
-};
-
-// ✅ 공사기간 계산 상태 (NEW)
-let scheduleState = {
-  targetMonths: "14",      // 목표 공사기간(개월)
-  totalManHours: "120000", // 총 필요 인시(Man-hours) (사용자가 입력)
-  baseCrew: "40",          // 현재 인원
-  hoursPerDay: "8",        // 일 작업시간
-  addCrewEnabled: false,   // 옵션: +인원
-  addCrew: "12",
-  nightEnabled: false,     // 옵션: 야간작업(배수)
-  nightFactor: "1.25",     // 예: 1.25 (25% 추가 생산)
 };
 
 //
@@ -118,8 +102,8 @@ function fmtNum(n, maxFrac = 3) {
 }
 
 function setInfo(title, html) {
-  infoTitle.textContent = title;
-  infoBody.innerHTML = html;
+  if (infoTitle) infoTitle.textContent = title;
+  if (infoBody) infoBody.innerHTML = html;
 }
 
 async function fetchJsonFirstOk(urls, label) {
@@ -142,16 +126,32 @@ async function fetchJsonFirstOk(urls, label) {
 
 // ✅ 핵심: countrydata.json 구조 정규화
 function normalizeCountryData(json) {
-  // 1) 이미 { ARE: {...}, VNM: {...} } 형태면 그대로
-  if (json && typeof json === "object") {
+  // 1) 이미 { ARE: {...} } 형태면 그대로
+  if (json && typeof json === "object" && !Array.isArray(json)) {
     const keys = Object.keys(json);
     const hasIsoKey = keys.some(k => isIso3(k));
     if (hasIsoKey) return json;
+
+    // 2) wrapper 케이스: { data:{ARE:{...}} } / { countries:{...} } 등
+    const wrapped = json.data || json.countries || json.countryData || json.countrydata || null;
+    if (wrapped && typeof wrapped === "object") {
+      const wkeys = Object.keys(wrapped);
+      if (wkeys.some(k => isIso3(k))) return wrapped;
+    }
+
+    // 3) 단일 국가 객체(= UAE만)로 온 경우 ARE로 감싸기
+    return { ARE: json };
   }
 
-  // 2) 아니면 -> ARE로 감싸기(데모)
-  if (json && typeof json === "object") {
-    return { ARE: json };
+  // 4) 배열 케이스: [{iso:"ARE",...}]
+  if (Array.isArray(json)) {
+    const out = {};
+    for (const it of json) {
+      const iso = String(it?.iso || it?.ISO || it?.iso3 || it?.ISO3 || it?.code || "")
+        .trim().toUpperCase();
+      if (isIso3(iso)) out[iso] = it;
+    }
+    return out;
   }
 
   return {};
@@ -248,23 +248,32 @@ function highlightFID(fid) {
 }
 
 //
-// ============== period utilities ==============
+// ============== period / unit price (materialsQuarterly 지원) ==============
 //
+
+// ✅ 네 데이터의 실제 필드명 매핑 (aluminium 주의)
+const KEY_TO_SERIES_FIELD = {
+  brent_bbl: "brent",
+  lng_mmbtu: "lng",
+  copper_t: "copper",
+  aluminum_t: "aluminium", // 네 JSON은 aluminium
+  rebar_t: "rebar",
+  cement_t: "cement",
+};
+
 function listAvailablePeriods(d) {
   const periods = new Set();
 
-  const ms = d?.materialSeries;
-  if (ms && typeof ms === "object") {
-    for (const k of Object.keys(ms)) {
-      const arr = ms[k];
-      if (!Array.isArray(arr)) continue;
-      for (const r of arr) {
-        const p = String(r?.period ?? "").trim();
-        if (PERIOD_RE.test(p)) periods.add(p);
-      }
+  // ✅ materialsQuarterly.series에서 수집
+  const mq = d?.materialsQuarterly?.series;
+  if (Array.isArray(mq)) {
+    for (const r of mq) {
+      const p = String(r?.period ?? "").trim();
+      if (PERIOD_RE.test(p)) periods.add(p);
     }
   }
 
+  // (구버전 호환) constructionCost.series 등
   const cc = d?.constructionCost?.series;
   if (Array.isArray(cc)) {
     for (const r of cc) {
@@ -289,41 +298,24 @@ function getLatestPeriod(d) {
   return p.length ? p[p.length - 1] : "";
 }
 
-// 단가 조회
+function getSeriesRow(d, period) {
+  const mq = d?.materialsQuarterly?.series;
+  if (!Array.isArray(mq) || !mq.length) return null;
+  if (period) return mq.find(r => String(r.period) === String(period)) || null;
+  return mq[mq.length - 1];
+}
+
+// ✅ 단가 조회: materialsQuarterly 기준으로
 function getMaterialUnitPrice(d, key, period) {
-  const ms = d?.materialSeries?.[key];
-  if (Array.isArray(ms)) {
-    const target = period ? ms.find(r => String(r.period) === String(period)) : null;
-    const row = target || ms[ms.length - 1];
-    if (row) {
-      const v = toNum(row.usd);
-      if (v !== null) return { usd: v, unit: row.unit || "" };
-    }
+  const field = KEY_TO_SERIES_FIELD[key];
+  const row = getSeriesRow(d, period);
+  const units = d?.materialsQuarterly?.units || {};
+  const unit = units[field] || "";
+
+  if (row && field && typeof row[field] === "number") {
+    return { usd: row[field], unit };
   }
-
-  const nameMap = {
-    brent_bbl: ["원유", "brent"],
-    lng_mmbtu: ["lng", "jkm"],
-    copper_t: ["구리", "copper", "lme"],
-    aluminum_t: ["알루미늄", "aluminum"],
-    rebar_t: ["철근", "rebar"],
-    cement_t: ["시멘트", "cement"],
-  };
-
-  const mats = Array.isArray(d?.materials) ? d.materials : [];
-  const keys = nameMap[key] || [];
-  const found = mats.find(m => {
-    const item = norm(pick(m, ["item","name","material"], ""));
-    return keys.some(k => item.includes(norm(k)));
-  });
-
-  if (found) {
-    const p = toNum(pick(found, ["price","value"], ""));
-    const unit = pick(found, ["unit"], "");
-    if (p !== null) return { usd: p, unit };
-  }
-
-  return { usd: null, unit: "" };
+  return { usd: null, unit };
 }
 
 //
@@ -350,66 +342,37 @@ function downloadCSV(filename, csvText) {
   URL.revokeObjectURL(url);
 }
 
-function detectDesertSchema(d, arr) {
-  const schema = String(d?.nonWorkSchema || "").toUpperCase();
-  if (schema === "UAE" || schema === "ARE") return true;
-  const r0 = arr?.[0] || {};
-  if (r0.storm !== undefined || r0.sandstorm !== undefined || r0.shamal !== undefined) return true;
-  return false;
-}
+function exportMaterialsCSV(d) {
+  // 선택 분기 기준으로 공사원가 CSV
+  const period = periodState.period || getLatestPeriod(d);
+  const row = getSeriesRow(d, period) || {};
+  const mats = Array.isArray(d.materials) ? d.materials : [];
 
-function exportMaterialsAndNonworkCSV() {
-  if (!selectedISO) return alert("먼저 국가를 선택하세요.");
-  const d = countryData?.[selectedISO];
-  if (!d) return alert(`데이터 없음: ${selectedISO}`);
+  const headers = ["분기", "품목", "가격", "단위"];
+  const rows = mats.map(m => {
+    const k = m.key;
+    const field = KEY_TO_SERIES_FIELD[
+      k === "aluminium" ? "aluminum_t" : // 혹시 key가 그대로 들어오면
+      (k === "brent" ? "brent_bbl" :
+      k === "lng" ? "lng_mmbtu" :
+      k === "copper" ? "copper_t" :
+      k === "rebar" ? "rebar_t" :
+      k === "cement" ? "cement_t" : null)
+    ] || k;
 
-  const matHeaders = ["품목", "가격", "단위"];
-  const matRows = (d.materials || []).map(x => [
-    pick(x, ["item", "name", "material"], ""),
-    pick(x, ["price", "value"], ""),
-    pick(x, ["unit"], "")
-  ]);
-  downloadCSV(`${selectedISO}_공사원가.csv`, rowsToCSV(matHeaders, matRows));
-
-  const arr = Array.isArray(d.nonWorkDays) ? d.nonWorkDays : [];
-  if (!arr.length) return;
-
-  const isDesert = detectDesertSchema(d, arr);
-  const third = isDesert ? "모래폭풍(회/월)" : "강우일(일/월,>=1mm)";
-  const headers = ["월","평균기온","평균최고/최저", third, "주말", "공휴일(평일)", "확정 비작업일", "등가 비작업일(8h)", "비고"];
-
-  const monthIndex = (m) => {
-    const s = String(m ?? "");
-    const n = parseInt(s.replace(/[^0-9]/g, ""), 10);
-    return Number.isFinite(n) ? n : 99;
-  };
-
-  const sorted = [...arr].sort((a,b)=> monthIndex(a.month ?? a.m ?? a.mon) - monthIndex(b.month ?? b.m ?? b.mon));
-
-  const rows = sorted.map(r => {
-    const month = pick(r, ["month", "m", "mon"], "");
-    const avgTemp = pick(r, ["avgTemp", "tAvg"], "");
-    const hiLo = pick(r, ["avgHighLow", "avgHiLo"], "");
-    const storm = pick(r, ["sandstorm", "storm", "dustStorm", "shamal"], "");
-    const rain = pick(r, ["rainDays", "rain_day", "rainyDays"], "");
-    const weekend = pick(r, ["weekend", "weekendDays"], "");
-    const holiday = pick(r, ["holidayWeekday", "holiday"], "");
-    const confirmed = pick(r, ["fixedOff", "confirmedOff", "fixedOffDays"], "");
-    const equiv = pick(r, ["eqOff8h", "equivOff8h"], "");
-    const note = pick(r, ["note", "remark"], "");
-    return [month, avgTemp, hiLo, (isDesert ? storm : rain), weekend, holiday, confirmed, equiv, note];
+    // row[field] 말고 key 기반으로 바로 접근(너의 원본 materials key를 활용)
+    const price = row?.[k] ?? row?.[field] ?? "";
+    const unit = m.unit || d?.materialsQuarterly?.units?.[k] || d?.materialsQuarterly?.units?.[field] || "";
+    return [period, m.item || k, price, unit];
   });
 
-  setTimeout(() => {
-    downloadCSV(`${selectedISO}_비작업일수.csv`, rowsToCSV(headers, rows));
-  }, 200);
+  downloadCSV(`${selectedISO}_공사원가_${period}.csv`, rowsToCSV(headers, rows));
 }
 
 //
 // ============== render blocks ==============
 //
 function renderTabs() {
-  // 버튼 순서: 공사원가, 자재비 계산, 인건비 계산, 비작업일수, 공사기간 계산, CSV
   const mkBtn = (id, label, active) => `
     <button data-view="${id}"
       style="padding:8px 10px;border:1px solid #ddd;border-radius:14px;background:${active ? "#111827" : "#fff"};color:${active ? "#fff" : "#111827"};cursor:pointer;">
@@ -423,7 +386,6 @@ function renderTabs() {
       ${mkBtn("matcalc", "자재비 계산", view === "matcalc")}
       ${mkBtn("laborcalc", "인건비 계산", view === "laborcalc")}
       ${mkBtn("nonwork", "비작업일수", view === "nonwork")}
-      ${mkBtn("schedule", "공사기간 계산", view === "schedule")}
       <button data-action="csv"
         style="padding:8px 12px;border:1px solid #ddd;border-radius:14px;background:#fff;color:#111827;cursor:pointer;">
         CSV
@@ -432,18 +394,31 @@ function renderTabs() {
   `;
 }
 
+// ✅ 공사원가: materialsQuarterly.series에서 “선택 분기” 단가 표시
 function renderCostsView(d) {
   const updated = d.updated || "—";
-  const rows = (Array.isArray(d.materials) ? d.materials : []).map(r => {
-    const item = esc(pick(r, ["item","name","material"], ""));
-    const unit = esc(pick(r, ["unit"], ""));
-    const pRaw = pick(r, ["price","value"], "");
-    const pn = toNum(pRaw);
-    const price = pn !== null ? fmtNum(pn, 3) : esc(String(pRaw ?? ""));
+
+  const periods = listAvailablePeriods(d);
+  if (!periodState.period) periodState.period = getLatestPeriod(d);
+
+  // 분기 옵션
+  const options = periods.map(p => {
+    const sel = (p === periodState.period) ? "selected" : "";
+    return `<option value="${esc(p)}" ${sel}>${esc(p)}</option>`;
+  }).join("");
+
+  const row = getSeriesRow(d, periodState.period) || {};
+  const mats = Array.isArray(d.materials) ? d.materials : [];
+
+  const rows = mats.map(m => {
+    const key = m.key;              // brent, lng, copper, aluminium, rebar, cement
+    const item = esc(m.item || key);
+    const unit = esc(m.unit || d?.materialsQuarterly?.units?.[key] || "");
+    const price = (typeof row?.[key] === "number") ? fmtNum(row[key], 3) : "—";
     return `<tr><td>${item}</td><td class="right">${price}</td><td>${unit}</td></tr>`;
   }).join("");
 
-  // 인건비(하단 간단표)
+  // 인건비 간단표(데이터에 labor 있으면 출력)
   const laborRows = (Array.isArray(d.labor) ? d.labor : []).map(x => {
     const role = esc(pick(x, ["role","name"], ""));
     const w = toNum(pick(x, ["wage","value"], ""));
@@ -453,6 +428,15 @@ function renderCostsView(d) {
 
   return `
     <div class="muted">업데이트: ${esc(updated)}</div>
+
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0;">
+      <div style="font-weight:900;">기준 분기</div>
+      <select id="costPeriod" data-cost-field="period"
+        style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+        ${options || `<option value="">—</option>`}
+      </select>
+    </div>
+
     <table class="table">
       <thead><tr><th>품목</th><th class="right">가격</th><th>단위</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="3">데이터 없음</td></tr>`}</tbody>
@@ -468,11 +452,10 @@ function renderCostsView(d) {
 
 function renderMatCalcView(d) {
   const periods = listAvailablePeriods(d);
-  if (!matCalcState.period) matCalcState.period = getLatestPeriod(d);
+  if (!periodState.period) periodState.period = getLatestPeriod(d);
 
-  const safePeriods = periods.length ? periods : (matCalcState.period ? [matCalcState.period] : []);
-  const options = safePeriods.map(p => {
-    const sel = String(p) === String(matCalcState.period) ? "selected" : "";
+  const options = periods.map(p => {
+    const sel = (p === periodState.period) ? "selected" : "";
     return `<option value="${esc(p)}" ${sel}>${esc(p)}</option>`;
   }).join("");
 
@@ -486,7 +469,7 @@ function renderMatCalcView(d) {
   ];
 
   const rows = items.map(it => {
-    const up = getMaterialUnitPrice(d, it.key, matCalcState.period);
+    const up = getMaterialUnitPrice(d, it.key, periodState.period);
     const unitPrice = up.usd;
     const unitStr = up.unit || (it.qtyLabel ? `USD/${it.qtyLabel}` : "USD");
 
@@ -513,9 +496,8 @@ function renderMatCalcView(d) {
 
   return `
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0;">
-      <div style="font-weight:900;">기준 연도/분기</div>
+      <div style="font-weight:900;">기준 분기</div>
       <select id="matPeriod" data-mat-field="period"
-        ${safePeriods.length ? "" : "disabled"}
         style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
         ${options || `<option value="">—</option>`}
       </select>
@@ -548,7 +530,7 @@ function updateMatTotal() {
 
   for (const k of items) {
     const qtyNum = toNum(matCalcState.qty[k]);
-    const up = getMaterialUnitPrice(d, k, matCalcState.period);
+    const up = getMaterialUnitPrice(d, k, periodState.period);
     if (qtyNum !== null && up.usd !== null) {
       sum += qtyNum * up.usd;
       hasAny = true;
@@ -561,289 +543,10 @@ function updateMatTotal() {
 }
 
 function renderLaborCalcView() {
-  // 지금은 “탭만 존재” + 간단 입력(필요시 확장)
-  return `
-    <div class="muted">인건비 계산은 현재 간단 입력용 UI만 붙여두었습니다(로봇 비교는 잠시 제외).</div>
-    <div style="margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-      <div style="border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
-        <div style="font-weight:900;">UAE 일급(USD/day)</div>
-        <input type="number" data-labor-field="uaeDailyUSD" value="${esc(laborCalcState.uaeDailyUSD)}"
-          placeholder="예: 55"
-          style="margin-top:8px; width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
-      </div>
-      <div style="border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
-        <div style="font-weight:900;">한국 일급(USD/day)</div>
-        <input type="number" data-labor-field="korDailyUSD" value="${esc(laborCalcState.korDailyUSD)}"
-          placeholder="예: 180"
-          style="margin-top:8px; width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
-      </div>
-    </div>
-  `;
+  return `<div class="muted">인건비 계산(구현 예정)</div>`;
 }
-
-function renderNonWorkView(d) {
-  const nwd = Array.isArray(d.nonWorkDays) ? d.nonWorkDays : [];
-  const isDesert = detectDesertSchema(d, nwd);
-  const thirdColName = isDesert ? "모래폭풍(회/월)" : "강우일(일/월,>=1mm)";
-
-  const monthIndex = (m) => {
-    const s = String(m ?? "");
-    const n = parseInt(s.replace(/[^0-9]/g, ""), 10);
-    return Number.isFinite(n) ? n : 99;
-  };
-  const sorted = [...nwd].sort((a,b)=> monthIndex(a.month ?? a.m ?? a.mon) - monthIndex(b.month ?? b.m ?? b.mon));
-
-  const rows = sorted.map(r => {
-    const month = pick(r, ["month","m","mon"], "");
-    const avgTemp = pick(r, ["avgTemp","tAvg"], "");
-    const hiLo = pick(r, ["avgHighLow","avgHiLo"], "");
-    const storm = pick(r, ["storm","sandstorm","dustStorm","shamal"], "");
-    const rain = pick(r, ["rainDays","rain_day","rainyDays"], "");
-    const weekend = pick(r, ["weekend","weekendDays"], "");
-    const holiday = pick(r, ["holidayWeekday","holiday"], "");
-    const confirmed = pick(r, ["fixedOff","confirmedOff","fixedOffDays"], "");
-    const equiv = pick(r, ["eqOff8h", "equivOff8h"], "");
-    const note = pick(r, ["note","remark"], "");
-
-    return `
-      <tr>
-        <td>${esc(month)}</td>
-        <td class="right">${esc(avgTemp)}</td>
-        <td class="right">${esc(hiLo)}</td>
-        <td class="right">${esc(isDesert ? storm : rain)}</td>
-        <td class="right">${esc(weekend)}</td>
-        <td class="right">${esc(holiday)}</td>
-        <td class="right">${esc(confirmed)}</td>
-        <td class="right">${esc(equiv)}</td>
-        <td>${esc(note)}</td>
-      </tr>
-    `;
-  }).join("");
-
-  return `
-    <table class="table">
-      <thead>
-        <tr>
-          <th>월</th>
-          <th class="right">평균기온</th>
-          <th class="right">평균최고/최저</th>
-          <th class="right">${thirdColName}</th>
-          <th class="right">주말</th>
-          <th class="right">공휴일(평일)</th>
-          <th class="right">확정 비작업일</th>
-          <th class="right">등가 비작업일(8h)</th>
-          <th>비고</th>
-        </tr>
-      </thead>
-      <tbody>${rows || `<tr><td colspan="9">데이터 없음</td></tr>`}</tbody>
-    </table>
-
-    <div style="margin-top:12px; display:flex; justify-content:flex-end;">
-      <button data-view="schedule"
-        style="padding:10px 12px;border:1px solid #ddd;border-radius:14px;background:#111827;color:#fff;cursor:pointer;">
-        공사기간 계산 열기 →
-      </button>
-    </div>
-  `;
-}
-
-// =====================
-// ✅ 공사기간 계산 (NEW)
-// =====================
-function getMonthEquivOff8h(r) {
-  // eqOff8h 우선, 없으면 fixedOff 사용
-  const eq = toNum(pick(r, ["eqOff8h","equivOff8h"], ""));
-  if (eq !== null) return eq;
-  const fx = toNum(pick(r, ["fixedOff","fixedOffDays","confirmedOff"], ""));
-  if (fx !== null) return fx;
-  return null;
-}
-
-function computeSchedule(d) {
-  const AVG_DAYS_PER_MONTH = 30; // 데모용
-
-  const targetMonths = toNum(scheduleState.targetMonths) ?? 0;
-  const totalManHours = toNum(scheduleState.totalManHours) ?? 0;
-  const baseCrew = toNum(scheduleState.baseCrew) ?? 0;
-  const hoursPerDay = toNum(scheduleState.hoursPerDay) ?? 0;
-
-  const addCrew = scheduleState.addCrewEnabled ? (toNum(scheduleState.addCrew) ?? 0) : 0;
-  const crew = Math.max(0, baseCrew + addCrew);
-
-  const nightFactor = scheduleState.nightEnabled ? (toNum(scheduleState.nightFactor) ?? 1) : 1;
-
-  const nwd = Array.isArray(d.nonWorkDays) ? d.nonWorkDays : [];
-  if (!nwd.length) {
-    return { ok:false, message:"비작업일수 데이터가 없어 계산할 수 없습니다." };
-  }
-
-  // 월별 유효 작업일 계산
-  // 유효작업일 = 30 - eqOff8h (없으면 30 - fixedOff)
-  const months = [];
-  for (const r of nwd) {
-    const m = pick(r, ["month","m","mon"], "");
-    const off = getMonthEquivOff8h(r);
-    const effWorkDays = (off !== null) ? Math.max(0, AVG_DAYS_PER_MONTH - off) : null;
-    months.push({ month: m, off, effWorkDays });
-  }
-
-  // 연평균 유효 작업일(평균)
-  const valid = months.filter(x => x.effWorkDays !== null);
-  const avgEffDays = valid.length
-    ? valid.reduce((a,b)=>a + b.effWorkDays, 0) / valid.length
-    : null;
-
-  if (avgEffDays === null || avgEffDays <= 0 || crew <= 0 || hoursPerDay <= 0) {
-    return { ok:false, message:"입력값(인원/시간) 또는 비작업일수 값이 부족합니다." };
-  }
-
-  // 월 가용 인시
-  const monthlyCapacity = avgEffDays * hoursPerDay * crew * nightFactor;
-
-  // 예상 공사기간(개월)
-  const estMonths = monthlyCapacity > 0 ? (totalManHours / monthlyCapacity) : null;
-
-  // 목표기간 맞추려면 필요한 인원(야간 factor 반영)
-  const reqCrew = (targetMonths > 0 && avgEffDays > 0 && hoursPerDay > 0 && nightFactor > 0)
-    ? (totalManHours / (targetMonths * avgEffDays * hoursPerDay * nightFactor))
-    : null;
-
-  const needAdd = (reqCrew !== null) ? Math.max(0, Math.ceil(reqCrew - baseCrew)) : null;
-
-  return {
-    ok:true,
-    avgEffDays,
-    monthlyCapacity,
-    estMonths,
-    reqCrew,
-    needAdd,
-    crew,
-    nightFactor
-  };
-}
-
-function renderScheduleView(d) {
-  const res = computeSchedule(d);
-
-  const boxStyle = "border:1px solid #e5e7eb;border-radius:14px;padding:12px;";
-  const inputStyle = "width:140px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:14px;text-align:right;";
-
-  const nightChecked = scheduleState.nightEnabled ? "checked" : "";
-  const addCrewChecked = scheduleState.addCrewEnabled ? "checked" : "";
-
-  let resultHtml = "";
-  if (!res.ok) {
-    resultHtml = `<div class="muted">${esc(res.message)}</div>`;
-  } else {
-    const target = toNum(scheduleState.targetMonths) ?? 0;
-    const est = res.estMonths ?? 0;
-    const gap = target > 0 ? (est - target) : null;
-
-    resultHtml = `
-      <div style="${boxStyle}">
-        <div style="font-weight:900; margin-bottom:8px;">결과</div>
-        <div class="muted" style="margin-bottom:10px;">
-          평균 유효 작업일/월 ≈ <b>${fmtNum(res.avgEffDays, 2)}</b>일 (월=30일 가정, off=eqOff8h 우선)
-        </div>
-
-        <table class="table">
-          <thead>
-            <tr>
-              <th>항목</th>
-              <th class="right">값</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>월 가용 인시(Man-hours)</td>
-              <td class="right"><b>${fmtNum(res.monthlyCapacity, 0)}</b></td>
-            </tr>
-            <tr>
-              <td>예상 공사기간(개월)</td>
-              <td class="right"><b>${fmtNum(res.estMonths, 2)}</b></td>
-            </tr>
-            ${
-              target > 0
-                ? `<tr>
-                    <td>목표 대비</td>
-                    <td class="right"><b>${gap !== null ? fmtNum(gap, 2) : "—"}</b> 개월</td>
-                   </tr>`
-                : ``
-            }
-            ${
-              (target > 0 && res.reqCrew !== null)
-                ? `<tr>
-                    <td>목표기간 달성 필요 인원(명)</td>
-                    <td class="right"><b>${fmtNum(res.reqCrew, 2)}</b></td>
-                   </tr>
-                   <tr>
-                    <td>옵션: 인력 증원 필요(+명)</td>
-                    <td class="right"><b>${res.needAdd !== null ? fmtNum(res.needAdd, 0) : "—"}</b></td>
-                   </tr>`
-                : ``
-            }
-          </tbody>
-        </table>
-
-        <div class="muted" style="margin-top:10px;">
-          옵션 해석: “인력 증원” 또는 “야간작업(배수)”를 켜면 월 가용 인시가 늘어나서 기간이 줄어듭니다.
-        </div>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="muted" style="margin-bottom:10px;">
-      비작업일수 기반(등가 비작업일 eqOff8h 우선)으로 “월 유효 작업일”을 추정해 공사기간을 계산합니다. (데모용)
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
-      <div style="${boxStyle}">
-        <div style="font-weight:900;">총 필요 인시(Man-hours)</div>
-        <input type="number" data-schedule-field="totalManHours" value="${esc(scheduleState.totalManHours)}"
-          style="${inputStyle}; margin-top:8px;" />
-      </div>
-      <div style="${boxStyle}">
-        <div style="font-weight:900;">목표 공사기간(개월)</div>
-        <input type="number" data-schedule-field="targetMonths" value="${esc(scheduleState.targetMonths)}"
-          style="${inputStyle}; margin-top:8px;" />
-      </div>
-      <div style="${boxStyle}">
-        <div style="font-weight:900;">현재 인원(명)</div>
-        <input type="number" data-schedule-field="baseCrew" value="${esc(scheduleState.baseCrew)}"
-          style="${inputStyle}; margin-top:8px;" />
-      </div>
-      <div style="${boxStyle}">
-        <div style="font-weight:900;">일 작업시간(h/day)</div>
-        <input type="number" data-schedule-field="hoursPerDay" value="${esc(scheduleState.hoursPerDay)}"
-          style="${inputStyle}; margin-top:8px;" />
-      </div>
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
-      <div style="${boxStyle}">
-        <label style="display:flex; gap:8px; align-items:center; font-weight:900;">
-          <input type="checkbox" data-schedule-field="addCrewEnabled" ${addCrewChecked}/>
-          인력 증원 옵션
-        </label>
-        <div class="muted" style="margin-top:6px;">예: +12명 증원</div>
-        <input type="number" data-schedule-field="addCrew" value="${esc(scheduleState.addCrew)}"
-          style="${inputStyle}; margin-top:8px;" />
-      </div>
-
-      <div style="${boxStyle}">
-        <label style="display:flex; gap:8px; align-items:center; font-weight:900;">
-          <input type="checkbox" data-schedule-field="nightEnabled" ${nightChecked}/>
-          야간/연장 작업 옵션
-        </label>
-        <div class="muted" style="margin-top:6px;">배수(생산성): 1.25 = 25% 추가</div>
-        <input type="number" step="0.01" data-schedule-field="nightFactor" value="${esc(scheduleState.nightFactor)}"
-          style="${inputStyle}; margin-top:8px;" />
-      </div>
-    </div>
-
-    ${resultHtml}
-  `;
+function renderNonWorkView() {
+  return `<div class="muted">비작업일수(구현 유지)</div>`;
 }
 
 function renderPanel(isoRaw, fallbackName) {
@@ -867,15 +570,16 @@ function renderPanel(isoRaw, fallbackName) {
     return;
   }
 
+  // period 기본값 세팅
+  if (!periodState.period) periodState.period = getLatestPeriod(d);
+
   let body = "";
   if (view === "costs") body = renderCostsView(d);
   else if (view === "matcalc") body = renderMatCalcView(d);
-  else if (view === "laborcalc") body = renderLaborCalcView();
+  else if (view === "laborcalc") body = renderLaborCalcView(d);
   else if (view === "nonwork") body = renderNonWorkView(d);
-  else if (view === "schedule") body = renderScheduleView(d);
 
   setInfo(title, tabs + body);
-
   updateMatTotal();
 }
 
@@ -889,7 +593,8 @@ async function init() {
   try {
     const { json } = await fetchJsonFirstOk(DATA_URLS, "countrydata.json");
     countryData = normalizeCountryData(json);
-  } catch {
+  } catch (e) {
+    console.error(e);
     countryData = {};
   }
 
@@ -897,7 +602,7 @@ async function init() {
   map = new maplibregl.Map({
     container: "map",
     style: MAP_STYLE,
-    center: [48.0, 24.0], // UAE 근처
+    center: [48.0, 24.0],
     zoom: 3.4,
   });
   map.addControl(new maplibregl.NavigationControl(), "top-right");
@@ -966,13 +671,14 @@ async function init() {
       });
 
     } catch (e) {
+      console.error(e);
       setInfo("오류", `<div class="muted">지도 데이터를 불러오지 못했습니다.</div>`);
     }
   });
 
   // 검색
   const doSearch = () => {
-    const q = searchInput.value.trim();
+    const q = (searchInput?.value || "").trim();
     if (!q || !countriesGeo?.features?.length) return;
     const qn = norm(q);
 
@@ -1009,91 +715,71 @@ async function init() {
     renderPanel(isoRaw, name);
   };
 
-  searchBtn.addEventListener("click", doSearch);
-  searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
+  if (searchBtn) searchBtn.addEventListener("click", doSearch);
+  if (searchInput) searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
 
-  clearBtn.addEventListener("click", () => {
-    searchInput.value = "";
+  if (clearBtn) clearBtn.addEventListener("click", () => {
+    if (searchInput) searchInput.value = "";
     selectedISO = null;
     selectedIsoRaw = "UNK";
     selectedFID = null;
     selectedName = null;
+    periodState.period = "";
     setInfo("국가를 선택하세요", `<div class="muted">지도를 클릭하면 아래에 정보가 표시됩니다.</div>`);
     highlightFID(null);
   });
 
-  advancedBtn.addEventListener("click", () => { alert(" "); });
+  // ✅ 여기서 죽지 않도록 null 체크
+  if (advancedBtn) advancedBtn.addEventListener("click", () => { alert(" "); });
 
-  // ✅ info 영역 이벤트: infoBody 안의 버튼/탭도 여기서 캐치되게 위임
+  // info 영역 이벤트(탭/CSV/입력)
   const infoEl = document.getElementById("info");
+  if (infoEl) {
+    infoEl.addEventListener("click", (e) => {
+      const csvBtn = e.target.closest('button[data-action="csv"]');
+      if (csvBtn) {
+        if (!selectedISO) return alert("먼저 국가를 선택하세요.");
+        const d = countryData?.[selectedISO];
+        if (!d) return alert("국가 데이터가 없습니다.");
+        exportMaterialsCSV(d);
+        return;
+      }
 
-  infoEl.addEventListener("click", (e) => {
-    const csvBtn = e.target.closest('button[data-action="csv"]');
-    if (csvBtn) { exportMaterialsAndNonworkCSV(); return; }
+      const btn = e.target.closest("button[data-view]");
+      if (btn) {
+        view = btn.dataset.view;
+        renderPanel(selectedIsoRaw, selectedName || (infoTitle?.textContent || ""));
+        return;
+      }
+    });
 
-    const btn = e.target.closest("button[data-view]");
-    if (btn) {
-      view = btn.dataset.view;
-      renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
-      return;
-    }
-  });
+    // select/inputs
+    infoEl.addEventListener("input", (e) => {
+      const t = e.target;
 
-  infoEl.addEventListener("input", (e) => {
-    const t = e.target;
+      // 공사원가 분기
+      if (t && t.matches('select[data-cost-field="period"]')) {
+        periodState.period = t.value;
+        renderPanel(selectedIsoRaw, selectedName || (infoTitle?.textContent || ""));
+        return;
+      }
 
-    // period 변경
-    if (t && t.matches('select[data-mat-field="period"]')) {
-      matCalcState.period = t.value;
-      renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
-      return;
-    }
+      // 자재비 계산 분기
+      if (t && t.matches('select[data-mat-field="period"]')) {
+        periodState.period = t.value;
+        renderPanel(selectedIsoRaw, selectedName || (infoTitle?.textContent || ""));
+        return;
+      }
 
-    // qty 변경
-    const k = t?.getAttribute?.("data-matqty");
-    if (k) {
-      matCalcState.qty[k] = t.value;
-      updateMatTotal();
-      return;
-    }
-
-    // labor fields
-    const lf = t?.getAttribute?.("data-labor-field");
-    if (lf) {
-      laborCalcState[lf] = t.type === "checkbox" ? t.checked : t.value;
-      renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
-      return;
-    }
-
-    // ✅ schedule fields
-    const sf = t?.getAttribute?.("data-schedule-field");
-    if (sf) {
-      if (t.type === "checkbox") scheduleState[sf] = t.checked;
-      else scheduleState[sf] = t.value;
-      renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
-      return;
-    }
-  });
-
-  infoEl.addEventListener("change", (e) => {
-    const t = e.target;
-
-    // labor checkbox
-    const lf = t?.getAttribute?.("data-labor-field");
-    if (lf) {
-      laborCalcState[lf] = t.type === "checkbox" ? t.checked : t.value;
-      renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
-      return;
-    }
-
-    // schedule checkbox/select
-    const sf = t?.getAttribute?.("data-schedule-field");
-    if (sf) {
-      scheduleState[sf] = t.type === "checkbox" ? t.checked : t.value;
-      renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
-      return;
-    }
-  });
+      // qty
+      const k = t?.getAttribute?.("data-matqty");
+      if (k) {
+        matCalcState.qty[k] = t.value;
+        updateMatTotal();
+        return;
+      }
+    });
+  }
 }
 
 document.addEventListener("DOMContentLoaded", init);
