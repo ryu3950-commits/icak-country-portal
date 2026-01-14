@@ -59,6 +59,40 @@
       { "role": "비숙련(일급)", "wage": 55, "unit": "USD/day" },
       { "role": "숙련(일급)", "wage": 95, "unit": "USD/day" }
     ],
+
+    "robotCleaning": {
+      "metricBasis": "solar PV panel cleaning (case study numbers)",
+      "annualCleaningCostUSDPerM2": {
+        "labor": 59.76,
+        "robot": 21.07,
+        "note": "PDF 요약값. (OPEX 최대 80% 절감 문구와 일관되도록 robot < labor로 매핑)"
+      },
+      "speedPanelsPerHour": {
+        "labor": { "min": 15, "max": 20 },
+        "robotPerUnit": { "min": 150, "max": 200 },
+        "note": "로봇이 인력 대비 약 10배"
+      },
+      "dailyThroughputMW": {
+        "laborPerPerson": { "min": 0.05, "max": 0.1 },
+        "robotPerUnit": { "min": 0.5, "max": 1.0 }
+      },
+      "uaeOpsFactors": {
+        "ramadanUtilizationFactorPct": 133.3,
+        "prayerBreakLossHoursPerDay": 1.0,
+        "overtimePremiumRange": { "min": 1.25, "max": 1.5 },
+        "hotWeatherBan": "6/15~9/15, 12:30~15:00 야외작업 금지(요약)"
+      },
+      "assumptionsForDailyUSD": {
+        "m2PerMWApprox": 7000,
+        "deriveRobotDailyUSD": "robotAnnualUSDPerM2/365 * (dailyThroughputMW * m2PerMWApprox)"
+      }
+    },
+
+    "robotDailyUSD": 300,
+    "robotDailyUSDRange": { "min": 200, "max": 400 },
+    "robotDailyUnit": "USD/robot-day",
+    "robotDailyNote": "연간 세척비용(USD/m²·year)과 로봇 1대 처리량(0.5~1.0MW/day)을 이용해 환산한 데모 단가",
+
     "ppp": {
       "lawUrl": "https://uaelegislation.gov.ae/en/legislations/2189/download",
       "statusUrl": "https://www.dof.gov.ae/en-us/ppp/Pages/PPP_Projects.aspx"
@@ -114,6 +148,33 @@
       { "role": "비숙련(일급)", "wage": 18, "unit": "USD/day" },
       { "role": "숙련(일급)", "wage": 35, "unit": "USD/day" }
     ],
+
+    "robotCleaning": {
+      "metricBasis": "solar PV panel cleaning (proxy based on same case study numbers)",
+      "annualCleaningCostUSDPerM2": {
+        "labor": 59.76,
+        "robot": 21.07,
+        "note": "UAE/요르단 사례 수치를 데모용으로 동일 적용(국가별 보정 가능)"
+      },
+      "speedPanelsPerHour": {
+        "labor": { "min": 15, "max": 20 },
+        "robotPerUnit": { "min": 150, "max": 200 }
+      },
+      "dailyThroughputMW": {
+        "laborPerPerson": { "min": 0.05, "max": 0.1 },
+        "robotPerUnit": { "min": 0.5, "max": 1.0 }
+      },
+      "assumptionsForDailyUSD": {
+        "m2PerMWApprox": 7000,
+        "deriveRobotDailyUSD": "robotAnnualUSDPerM2/365 * (dailyThroughputMW * m2PerMWApprox)"
+      }
+    },
+
+    "robotDailyUSD": 300,
+    "robotDailyUSDRange": { "min": 200, "max": 400 },
+    "robotDailyUnit": "USD/robot-day",
+    "robotDailyNote": "데모: 사례 기반 환산값(국가별로 실제 임대료/정비비/운영비로 조정 필요)",
+
     "ppp": {
       "lawUrl": "https://english.luatvietnam.vn/law-on-investment-in-the-form-of-public-private-partnership-no-64-2020-qh14-dated-june-18-2020-of-the-national-assembly-186267-doc1.html",
       "statusUrl": "https://fpt-is.com/en/new-e-government-procurement-system-officially-comes-into-operation-on-september-16/"
