@@ -195,3 +195,30 @@ body{
   #map{ height: 48vh; min-height: 340px; }
   .info{ min-height: 48vh; }
 }
+
+
+/* ✅ 버튼 클릭 안되는 문제 99% 해결 세트 */
+
+/* map 캔버스가 다른 영역 덮지 않게 */
+.map-wrap { 
+  position: relative;
+  z-index: 1;
+}
+
+/* info 패널을 맵보다 위로 */
+.info {
+  position: relative;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+/* 혹시 상위에서 pointer-events: none 먹는 경우 방지 */
+.info * {
+  pointer-events: auto;
+}
+
+/* 버튼이 눌리는지 시각적으로 확인 */
+.info button {
+  pointer-events: auto;
+}
+
