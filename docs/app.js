@@ -1,8 +1,9 @@
-// app.js (LIGHT LABOR ADDED - UPDATED)
+// app.js (LIGHT LABOR ADDED + DURATION CALC ADDED)
 // ✅ 인건비 표 위치: "공사원가(costs)"의 자재비 표 아래
-// ✅ 인건비 섹션의 설명 문구(국가 데이터에 있는...) 제거
+// ✅ 인건비 섹션의 설명 문구 제거
 // ✅ "자재비 계산(matcalc)" 화면에서는 인건비 표 제거
-// ✅ 탭: 공사원가 / 자재비 계산 / 인건비 계산 / 비작업일수 / CSV
+// ✅ 탭: 공사원가 / 자재비 계산 / 인건비 계산 / 비작업일수 / 공사기간 계산 / CSV
+// ✅ 공사기간 계산: 비작업일수(월별) 기반 작업가능비율 추정 → 작업일수/달력일수/필요인원 계산
 
 const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
 
@@ -47,7 +48,7 @@ let selectedIsoRaw = "UNK";
 let selectedFID = null;
 let selectedName = null;
 
-let view = "costs"; // costs | matcalc | laborcalc | nonwork
+let view = "costs"; // costs | matcalc | laborcalc | nonwork | duration
 
 // 자재비 계산 상태(분기/수량)
 let matCalcState = {
@@ -60,6 +61,16 @@ let matCalcState = {
     rebar: "",
     cement: "",
   },
+};
+
+// 공사기간 계산 상태
+let durationCalcState = {
+  year: new Date().getFullYear(),
+  manDays: "",         // 총 작업량(인일)
+  crew: "40",          // 투입 인원(명)
+  shiftMode: "day",    // day | daynight
+  overtimePremium: "1.0", // 1.0 | 1.25 | 1.5
+  targetCalendarDays: "", // 목표 공사기간(달력일) - 선택
 };
 
 // ============== helpers ==============
@@ -426,6 +437,7 @@ function renderTabs() {
       ${mkBtn("matcalc", "자재비 계산", view === "matcalc")}
       ${mkBtn("laborcalc", "인건비 계산", view === "laborcalc")}
       ${mkBtn("nonwork", "비작업일수", view === "nonwork")}
+      ${mkBtn("duration", "공사기간 계산", view === "duration")}
       <button data-action="csv"
         style="padding:8px 12px;border:1px solid #ddd;border-radius:14px;background:#fff;color:#111827;cursor:pointer;">
         CSV
@@ -659,6 +671,185 @@ function renderNonWorkView(d) {
   `;
 }
 
+// ============== duration calc helpers ==============
+function daysInMonth(year, month1to12) {
+  const m = Math.max(1, Math.min(12, Number(month1to12) || 1));
+  return new Date(year, m, 0).getDate(); // month is 1-based here: new Date(y, m, 0) = last day of month m
+}
+
+function parseMonthNumber(m) {
+  const s = String(m ?? "");
+  const n = parseInt(s.replace(/[^0-9]/g, ""), 10);
+  if (!Number.isFinite(n)) return null;
+  if (n >= 1 && n <= 12) return n;
+  return null;
+}
+
+// 월별 비작업일수에서 "비작업 총량"을 뽑아내서 연간 작업가능비율 계산
+function computeWorkabilityRatio(d, year) {
+  const nwd = Array.isArray(d?.nonWorkDays) ? d.nonWorkDays : [];
+  if (!nwd.length) {
+    // 데이터 없으면 보수적으로 0.72(주5일 기준) 정도로 둠
+    return { ratio: 0.72, detail: null };
+  }
+
+  let totalDays = 0;
+  let totalOff = 0;
+
+  for (const r of nwd) {
+    const mon = parseMonthNumber(pick(r, ["month", "m", "mon"], ""));
+    if (!mon) continue;
+
+    const mdays = daysInMonth(year, mon);
+    totalDays += mdays;
+
+    // eqOff8h가 있으면 그걸 우선(8h 기준 등가 비작업일)
+    const eq = toNum(pick(r, ["eqOff8h", "equivOff8h"], ""));
+    const conf = toNum(pick(r, ["fixedOff", "confirmedOff", "fixedOffDays"], ""));
+
+    const off = (eq !== null ? eq : (conf !== null ? conf : 0));
+    totalOff += Math.max(0, off);
+  }
+
+  if (totalDays <= 0) return { ratio: 0.72, detail: null };
+
+  const workable = Math.max(0, totalDays - totalOff);
+  const ratio = workable / totalDays;
+
+  return {
+    ratio: Math.min(0.95, Math.max(0.3, ratio)),
+    detail: { totalDays, totalOff, workable }
+  };
+}
+
+function getShiftMultiplier(mode) {
+  // 주간=1.0, 주야간=1.6 (야간 생산성 저하를 포함한 단순 계수)
+  if (mode === "daynight") return 1.6;
+  return 1.0;
+}
+
+function renderDurationCalcView(d) {
+  const year = Number(durationCalcState.year) || new Date().getFullYear();
+  const manDays = toNum(durationCalcState.manDays);
+  const crew = Math.max(1, toNum(durationCalcState.crew) ?? 40);
+  const ot = Math.max(1, toNum(durationCalcState.overtimePremium) ?? 1.0);
+  const shiftM = getShiftMultiplier(durationCalcState.shiftMode);
+
+  const { ratio, detail } = computeWorkabilityRatio(d, year);
+
+  // 산정
+  const workDaysNeeded = (manDays !== null) ? (manDays / (crew * shiftM * ot)) : null;
+  const calendarDaysNeeded = (workDaysNeeded !== null) ? (workDaysNeeded / ratio) : null;
+
+  const targetCal = toNum(durationCalcState.targetCalendarDays);
+  const crewNeeded = (manDays !== null && targetCal !== null && targetCal > 0)
+    ? (manDays / (targetCal * ratio * shiftM * ot))
+    : null;
+
+  const ratioText = (detail)
+    ? `${fmtNum(ratio * 100, 1)}% (연간 ${detail.workable.toFixed(0)}/${detail.totalDays.toFixed(0)}일 작업 가능)`
+    : `${fmtNum(ratio * 100, 1)}%`;
+
+  const resultBlock = `
+    <div style="margin-top:14px;">
+      <div style="font-weight:900; margin-bottom:8px;">결과</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>항목</th>
+            <th class="right">값</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>작업가능비율</td>
+            <td class="right"><b>${esc(ratioText)}</b></td>
+          </tr>
+          <tr>
+            <td>필요 작업일수</td>
+            <td class="right"><b>${workDaysNeeded !== null ? fmtNum(workDaysNeeded, 1) + " 일" : "—"}</b></td>
+          </tr>
+          <tr>
+            <td>예상 공사기간(달력일)</td>
+            <td class="right"><b>${calendarDaysNeeded !== null ? fmtNum(calendarDaysNeeded, 0) + " 일" : "—"}</b></td>
+          </tr>
+          <tr>
+            <td>목표 달력일 기준 필요 인원</td>
+            <td class="right"><b>${crewNeeded !== null ? fmtNum(Math.ceil(crewNeeded), 0) + " 명" : "—"}</b></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  return `
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <div style="font-weight:900;">기준 연도</div>
+      <input type="number" data-duration-field="year" value="${esc(year)}"
+        style="width:120px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;" />
+
+      <div style="font-weight:900;">총 작업량</div>
+      <input type="number" data-duration-field="manDays" value="${esc(durationCalcState.manDays)}"
+        placeholder="인일(예: 4000)"
+        style="width:180px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+      <span class="muted">인일</span>
+    </div>
+
+    <div style="margin-top:12px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+      <div style="border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
+        <div style="font-weight:900;">투입 인원</div>
+        <div style="display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap;">
+          <input type="number" min="1" data-duration-field="crew" value="${esc(durationCalcState.crew)}"
+            style="width:140px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+          <span class="muted">명</span>
+          <button type="button" data-duration-preset="12"
+            style="padding:8px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;">
+            12명
+          </button>
+          <button type="button" data-duration-preset="40"
+            style="padding:8px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;">
+            40명
+          </button>
+        </div>
+      </div>
+
+      <div style="border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
+        <div style="font-weight:900;">작업 방식</div>
+        <div style="display:flex; gap:10px; align-items:center; margin-top:8px; flex-wrap:wrap;">
+          <select data-duration-field="shiftMode"
+            style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+            <option value="day" ${durationCalcState.shiftMode === "day" ? "selected" : ""}>주간</option>
+            <option value="daynight" ${durationCalcState.shiftMode === "daynight" ? "selected" : ""}>주야간</option>
+          </select>
+
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="muted">OT</span>
+            <select data-duration-field="overtimePremium"
+              style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+              ${[1.0, 1.25, 1.5].map(v => `
+                <option value="${v}" ${Number(durationCalcState.overtimePremium) === v ? "selected" : ""}>x${v}</option>
+              `).join("")}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px; border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
+      <div style="font-weight:900;">목표 공사기간(선택)</div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+        <input type="number" min="1" data-duration-field="targetCalendarDays" value="${esc(durationCalcState.targetCalendarDays)}"
+          placeholder="달력일(예: 180)"
+          style="width:180px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+        <span class="muted">일</span>
+      </div>
+    </div>
+
+    ${resultBlock}
+  `;
+}
+
+// ============== panel ==============
 function renderPanel(isoRaw, fallbackName) {
   selectedIsoRaw = (isoRaw || "UNK").toString().trim().toUpperCase();
   const iso = isIso3(selectedIsoRaw) && selectedIsoRaw !== "UNK" ? selectedIsoRaw : null;
@@ -688,6 +879,7 @@ function renderPanel(isoRaw, fallbackName) {
   else if (view === "matcalc") body = renderMatCalcView(d);
   else if (view === "laborcalc") body = renderLaborCalcView(d);
   else if (view === "nonwork") body = renderNonWorkView(d);
+  else if (view === "duration") body = renderDurationCalcView(d);
 
   setInfo(title, tabs + body);
   updateMatTotal();
@@ -857,6 +1049,14 @@ async function init() {
         renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
         return;
       }
+
+      // 공사기간 계산 - 인원 프리셋
+      const preset = e.target.closest("button[data-duration-preset]");
+      if (preset) {
+        durationCalcState.crew = preset.dataset.durationPreset;
+        renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
+        return;
+      }
     });
 
     // ✅ period 변경은 change로 받는게 확실함
@@ -868,15 +1068,33 @@ async function init() {
         renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
         return;
       }
+
+      // duration fields (select)
+      const df = t?.getAttribute?.("data-duration-field");
+      if (df) {
+        durationCalcState[df] = t.value;
+        renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
+        return;
+      }
     });
 
     // ✅ qty 입력은 input으로 즉시 반영
     infoEl.addEventListener("input", (e) => {
       const t = e.target;
+
+      // mat qty
       const k = t?.getAttribute?.("data-matqty");
       if (k) {
         matCalcState.qty[k] = t.value;
         updateMatTotal();
+        return;
+      }
+
+      // duration fields (input)
+      const df = t?.getAttribute?.("data-duration-field");
+      if (df) {
+        durationCalcState[df] = t.value;
+        renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
         return;
       }
     });
