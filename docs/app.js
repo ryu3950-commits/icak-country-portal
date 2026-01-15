@@ -1,5 +1,5 @@
 // app.js (LIGHT LABOR + ROBOT COST + LABOR CALC + DURATION CALC)
-// ✅ 공사원가(costs): "로봇 세척 비용" 블록 제거 → 인건비 섹션에만 로봇 가격 표시
+// ✅ 공사원가(costs): 자재비 표 아래에 "로봇 세척 비용" 블록 추가  -> ❌ 제거 (인건비 표에만 로봇 단가 표시)
 // ✅ 인건비: countrydata의 laborAnnual(연도별) 있으면 연도 선택 가능 + 없으면 labor(기존) fallback
 // ✅ 인건비 계산(laborcalc): 총 인일 + 프리미엄 + 로봇 투입(대체율/로봇단가/대체 인일) → 절감효과 계산
 // ✅ 공사기간 계산(duration): 비작업일수 기반 작업가능비율 추정 → 작업일수/달력일수/필요인원 계산
@@ -386,15 +386,11 @@ function getLaborWageByYear(d, role, year) {
   // fallback: 기존 labor 배열(표시용)
   const arr = Array.isArray(d?.labor) ? d.labor : [];
 
-  // ✅ 버그 수정: "비숙련" 문자열에 "숙련"이 포함되어 숙련 검색이 비숙련을 먼저 잡는 문제 방지
+  // ✅ 버그 수정: "비숙련" 안에 "숙련"이 포함되어 skilled도 비숙련을 잡아버림
   if (role === "unskilled") {
-    const u = arr.find((x) => {
-      const label = String(pick(x, ["role", "name", "title"], ""));
-      return label.includes("비숙련");
-    });
+    const u = arr.find((x) => String(pick(x, ["role", "name", "title"], "")).includes("비숙련"));
     if (u) return toNum(pick(u, ["wage", "value", "price"], ""));
   }
-
   if (role === "skilled") {
     const s2 = arr.find((x) => {
       const label = String(pick(x, ["role", "name", "title"], ""));
@@ -539,42 +535,21 @@ function renderPeriodSelect(d) {
   `;
 }
 
-// ✅ 공사원가(costs)에서 로봇 연간 블록은 제거(함수는 그대로 두되 호출만 안 함)
-function renderRobotCostBlock(d) {
-  const rc = d?.robotCleaning;
-  const robot = toNum(rc?.annualCostUsdPerM2?.robot);
-  const labor = toNum(rc?.annualCostUsdPerM2?.labor);
-
-  if (robot === null && labor === null) return "";
-
-  const ratio = robot !== null && labor !== null && labor > 0 ? robot / labor : null;
-  const diff = robot !== null && labor !== null ? robot - labor : null;
-
-  return `
-    <div style="margin-top:16px; font-weight:900;">로봇 세척 비용(연간)</div>
-    <table class="table" style="margin-top:8px;">
-      <thead><tr><th>구분</th><th class="right">단가</th><th>단위</th></tr></thead>
-      <tbody>
-        <tr><td>로봇</td><td class="right">${robot !== null ? fmtNum(robot, 2) : "—"}</td><td>USD/m²·year</td></tr>
-        <tr><td>인력</td><td class="right">${labor !== null ? fmtNum(labor, 2) : "—"}</td><td>USD/m²·year</td></tr>
-        <tr><td>로봇/인력</td><td class="right"><b>${ratio !== null ? fmtNum(ratio * 100, 1) + "%" : "—"}</b></td><td></td></tr>
-        <tr><td>차이(로봇-인력)</td><td class="right"><b>${diff !== null ? fmtNum(diff, 2) : "—"}</b></td><td>USD/m²·year</td></tr>
-      </tbody>
-    </table>
-  `;
-}
-
+// ✅ 공사원가(costs)에서 인건비 표 + 로봇 단가 포함
 function renderLaborBlock(d, opts = {}) {
   const mode = opts.mode || "simple"; // simple | calc
   const years = listLaborYears(d);
   const defaultYear = getLatestLaborYear(d) ?? new Date().getFullYear();
 
-  // simple 모드에서는 durationCalcState.year를 따라가게 해서 "연도 선택 UI"를 공유
+  // simple 모드에서는 durationCalcState.year에 맞춰서 "연도 선택 UI" 공유
   const y = mode === "calc" ? Number(laborCalcState.year) || defaultYear : Number(durationCalcState.year) || defaultYear;
 
   const unsk = getLaborWageByYear(d, "unskilled", y);
   const skl = getLaborWageByYear(d, "skilled", y);
   const unit = esc(d?.laborAnnual?.unit || (Array.isArray(d?.labor) && d.labor[0]?.unit) || "USD/day");
+
+  // ✅ 로봇 단가: d.robotDailyUSD 우선 → robotCleaning.robotDailyUsd → 없으면 13
+  const robotDaily = toNum(d?.robotDailyUSD) ?? toNum(d?.robotCleaning?.robotDailyUsd) ?? 13;
 
   const yearSelect = years.length
     ? `
@@ -587,26 +562,15 @@ function renderLaborBlock(d, opts = {}) {
     `
     : "";
 
-  // ✅ 로봇 가격은 인건비 섹션 안에서만 보여주기
-  const robotDailyUsd =
-    toNum(d?.robotDailyUSD) ??
-    toNum(d?.robotDailyUsd) ??
-    toNum(d?.robotCleaning?.robotDailyUsd) ??
-    null;
-
-  const robotRow = robotDailyUsd !== null
-    ? `<tr><td>로봇(1대·일)</td><td class="right">${fmtNum(robotDailyUsd, 2)}</td><td>USD/robot-day</td></tr>`
-    : "";
-
   return `
     <div style="margin-top:16px; font-weight:900;">인건비</div>
     ${yearSelect}
     <table class="table" style="margin-top:8px;">
-      <thead><tr><th>구분</th><th class="right">일급</th><th>단위</th></tr></thead>
+      <thead><tr><th>구분</th><th class="right">단가</th><th>단위</th></tr></thead>
       <tbody>
         <tr><td>비숙련</td><td class="right">${unsk !== null ? fmtNum(unsk, 2) : "—"}</td><td>${unit}</td></tr>
         <tr><td>숙련</td><td class="right">${skl !== null ? fmtNum(skl, 2) : "—"}</td><td>${unit}</td></tr>
-        ${robotRow}
+        <tr><td>로봇(1대·일)</td><td class="right"><b>${robotDaily !== null ? fmtNum(robotDaily, 0) : "—"}</b></td><td>USD/robot-day</td></tr>
       </tbody>
     </table>
   `;
@@ -753,10 +717,11 @@ function computeLaborCalc(d) {
   const laborCostNoRobot =
     effectiveWage !== null && totalManDays !== null ? effectiveWage * totalManDays : null;
 
+  // ✅ 로봇 단가 기본값 우선순위 개선 (기존 코드 최소 변경)
   const robotDailyDefault =
     toNum(laborCalcState.robotDailyUsd) ??
-    toNum(d?.robotCleaning?.robotDailyUsd) ??
     toNum(d?.robotDailyUSD) ??
+    toNum(d?.robotCleaning?.robotDailyUsd) ??
     13; // fallback
 
   if (!laborCalcState.robotUse) {
@@ -848,7 +813,7 @@ function renderLaborCalcView(d) {
           <label style="display:flex; align-items:center; gap:8px;">
             <span class="muted">로봇 1대·일</span>
             <input type="number" min="0" step="0.1" data-labor-field="robotDailyUsd" value="${esc(laborCalcState.robotDailyUsd)}"
-              placeholder="${fmtNum(toNum(d?.robotCleaning?.robotDailyUsd) ?? toNum(d?.robotDailyUSD) ?? 13, 1)}"
+              placeholder="${fmtNum(toNum(d?.robotDailyUSD) ?? toNum(d?.robotCleaning?.robotDailyUsd) ?? 13, 1)}"
               style="width:140px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
             <span class="muted">USD/day</span>
           </label>
