@@ -50,7 +50,7 @@
     ],
     "robotCleaning": {
       "annualCostUsdPerM2": { "robot": 59.76, "labor": 21.07 },
-      "robotDailyUsd": 300,
+      "robotDailyUsd": 500,
       "robotDailyUnit": "USD/robot-day",
       "note": "Robot cleaning cost based on case-study assumptions."
     },
@@ -141,3 +141,4 @@
     ]
   }
 }
+
