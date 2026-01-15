@@ -592,16 +592,19 @@ function renderLaborBlock(d, opts = {}) {
   const robotDaily = getRobotDailyUsdDefault(d);
   const replaceDefault = getRobotReplaceManDaysPerRobotDayDefault();
 
-  const yearSelect = years.length
-    ? `
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
-        <div style="font-weight:900;">인건비 연도</div>
-        <select data-labor-year style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
-          ${years.map(v => `<option value="${v}" ${v === y ? "selected" : ""}>${v}</option>`).join("")}
-        </select>
-      </div>
-    `
-    : "";
+  const yearSelect = `
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+      <div style="font-weight:900;">인건비 연도</div>
+      ${years.length
+        ? `<select data-labor-year style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+            ${years.map(v => `<option value="${v}" ${v === y ? "selected" : ""}>${v}</option>`).join("")}
+          </select>`
+        : `<input type="number" data-labor-year value="${y}"
+            style="width:120px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;" />
+           <span class="muted">(연도별 데이터 없음)</span>`}
+    </div>
+  `;
+
 
   return `
     <div style="margin-top:16px; font-weight:900;">인건비</div>
@@ -702,6 +705,8 @@ function renderMatCalcView(d) {
       <tbody>${rows}</tbody>
     </table>
     <div id="matTotal" style="margin-top:12px; font-weight:900; text-align:right; font-size:16px;"></div>
+    ${renderLaborBlock(d, { mode: "simple" })}
+
   `;
 }
 
@@ -1660,7 +1665,7 @@ async function init() {
       }
 
       // costs에서 인건비 연도 변경 UI(data-labor-year)
-      if (t && t.matches('select[data-labor-year]')) {
+      if (t && t.matches('[data-labor-year]')) {
         // ✅ costs(표시) / laborcalc(계산) 연도 동기화
         durationCalcState.year = t.value;
         laborCalcState.year = t.value;
@@ -1679,6 +1684,14 @@ async function init() {
         matCalcState.qty[k] = t.value;
         updateMatRowCost(k);
         updateMatTotal();
+        return;
+      }
+
+      // ✅ 공사원가/자재비 탭 인건비 연도 입력(즉시 반영)
+      if (t && t.matches('[data-labor-year]')) {
+        durationCalcState.year = t.value;
+        laborCalcState.year = t.value;
+        scheduleRerender();
         return;
       }
 
