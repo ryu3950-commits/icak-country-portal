@@ -567,8 +567,12 @@ function renderLaborBlock(d, opts = {}) {
   const skl = getLaborWageByYear(d, "skilled", y);
   const unit = esc(d?.laborAnnual?.unit || (Array.isArray(d?.labor) && d.labor[0]?.unit) || "USD/day");
 
-  const robotDaily = getRobotDailyUsdDefault(d);
-  const replaceDefault = getRobotReplaceManDaysPerRobotDayDefault();
+const robotDailyInput = toNum(laborCalcState.robotDailyUsd);
+const robotDailyDefault =
+  robotDailyInput !== null && robotDailyInput > 0
+    ? robotDailyInput
+    : getRobotDailyUsdDefault(d);
+
 
   const yearSelect = years.length
     ? `
@@ -1558,4 +1562,5 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
 
