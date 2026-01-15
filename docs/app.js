@@ -3,6 +3,7 @@
 // ✅ 인건비: countrydata의 laborAnnual(연도별) 있으면 연도 선택 가능 + 없으면 labor(기존) fallback
 // ✅ 인건비 계산(laborcalc): 총 인일 + 프리미엄 + 로봇 투입(대체율/로봇단가/대체 인일) → 절감효과 계산
 // ✅ 공사기간 계산(duration): 비작업일수 기반 작업가능비율 추정 → 작업일수/달력일수/필요인원 계산
+// ✅ (NEW) 공사기간 입력을 "물량 기반"으로도 지원: 공종 선택 + 물량 입력 → 내부 생산성으로 인일 환산(생산성은 UI 미노출)
 //
 // [countrydata.json 권장 구조]
 // - laborAnnual: { unit:"USD/day", series:[{year, unskilled, skilled}, ...] }
@@ -75,7 +76,14 @@ let matCalcState = {
 // 공사기간 계산 상태
 let durationCalcState = {
   year: new Date().getFullYear(),
-  manDays: "", // 총 작업량(인일)
+
+  // ✅ 기존 "총 작업량(인일)"도 유지(호환)
+  manDays: "",
+
+  // ✅ (NEW) 물량 기반 입력
+  workType: "general", // general | rebar_t | concrete_m3 | form_m2 | cable_m | pv_panel_ea
+  quantity: "",
+
   crew: "", // ✅ 기본값 40 제거 → 빈값
   shiftMode: "day", // day | daynight
   targetCalendarDays: "", // 목표 공사기간(달력일)
@@ -104,7 +112,7 @@ let laborCalcState = {
 };
 
 // ============== helpers ==============
-const PERIOD_RE = /^(\d{4})Q([1-4])$/;
+const PERIOD_RE = /^(\\d{4})Q([1-4])$/;
 
 const isIso3 = (v) => {
   if (typeof v !== "string") return false;
@@ -298,6 +306,7 @@ function highlightFID(fid) {
   }
   map.setFilter("countries-selected", ["==", ["get", "__fid"], fid]);
   map.setFilter("countries-selected-outline", ["==", ["get", "__fid"], fid]);
+  return;
 }
 
 // ============== period utilities (materialsQuarterly 기준) ==============
@@ -672,8 +681,7 @@ function renderMatCalcView(d) {
             />
             <span class="muted" style="margin-left:6px;">${esc(it.qtyLabel)}</span>
           </td>
-          <!-- ✅ 각 행 금액도 즉시 갱신될 수 있도록 id 부여 -->
-          <td class="right"><b id="matCost_${esc(it.key)}">${cost !== null ? fmtNum(cost, 2) : "—"}</b></td>
+          <td class="right"><b>${cost !== null ? fmtNum(cost, 2) : "—"}</b></td>
         </tr>
       `;
     })
@@ -720,24 +728,6 @@ function updateMatTotal() {
   const el = document.getElementById("matTotal");
   if (!el) return;
   el.textContent = hasAny ? `합계: ${fmtNum(sum, 2)} USD` : `합계: —`;
-}
-
-// ✅ (추가) matcalc: 특정 품목 행 금액만 즉시 갱신
-function updateMatRowCost(key) {
-  if (view !== "matcalc") return;
-  const d = countryData?.[selectedISO];
-  if (!d) return;
-
-  const period = matCalcState.period || getLatestPeriod(d) || "";
-  const qtyNum = toNum(matCalcState.qty[key]);
-  const up = getMaterialUnitPrice(d, key, period);
-
-  const cost = qtyNum !== null && up.usd !== null ? qtyNum * up.usd : null;
-
-  const el = document.getElementById(`matCost_${key}`);
-  if (!el) return;
-
-  el.textContent = cost !== null ? fmtNum(cost, 2) : "—";
 }
 
 // ============== laborcalc (계산) ==============
@@ -1130,10 +1120,51 @@ function getShiftMultiplier(mode) {
   return 1.0;
 }
 
+// ✅ (NEW) 물량 → 인일 환산용 내부 생산성(UI 미노출)
+// - unitPerManDay: "1인·일"당 처리 가능한 물량
+// - 현장/공법별 편차가 커서, 필요 시 이 숫자만 바꾸면 전체가 자동 업데이트됨
+const DURATION_WORK_TYPES = [
+  { key: "general", label: "기타(직접 인일 입력)", unit: "—", unitPerManDay: null },
+
+  // 예시 생산성(기본값) — 필요하면 너 기준으로 조정 가능
+  { key: "rebar_t", label: "철근(가공+조립)", unit: "t", unitPerManDay: 0.15 },
+  { key: "concrete_m3", label: "콘크리트(타설)", unit: "m³", unitPerManDay: 2.5 },
+  { key: "form_m2", label: "거푸집(설치/해체)", unit: "m²", unitPerManDay: 18 },
+  { key: "cable_m", label: "전기 케이블 포설", unit: "m", unitPerManDay: 250 },
+  { key: "pv_panel_ea", label: "태양광 모듈 설치", unit: "EA", unitPerManDay: 20 },
+];
+
+function getWorkTypeMeta(key) {
+  return DURATION_WORK_TYPES.find((x) => x.key === key) || DURATION_WORK_TYPES[0];
+}
+
+function computeManDaysFromQuantity(d) {
+  // 1) 물량 기반 입력 우선
+  const q = toNum(durationCalcState.quantity);
+  const wt = String(durationCalcState.workType || "general");
+  const meta = getWorkTypeMeta(wt);
+
+  if (q !== null && q > 0 && meta && meta.unitPerManDay) {
+    const manDays = q / meta.unitPerManDay;
+    return { manDays, source: "quantity", meta, quantity: q };
+  }
+
+  // 2) 기존 인일 입력 fallback
+  const md = toNum(durationCalcState.manDays);
+  if (md !== null && md > 0) {
+    return { manDays: md, source: "mandays", meta: getWorkTypeMeta("general"), quantity: null };
+  }
+
+  return { manDays: null, source: "none", meta, quantity: q };
+}
+
 // ✅ duration: OT 제거(주간/주야간만)
 function renderDurationCalcView(d) {
   const year = Number(durationCalcState.year) || new Date().getFullYear();
-  const manDays = toNum(durationCalcState.manDays);
+
+  // ✅ NEW: 물량 → 인일 환산
+  const mdInfo = computeManDaysFromQuantity(d);
+  const manDays = mdInfo.manDays;
 
   const crewNum = toNum(durationCalcState.crew);
   const crew = crewNum !== null && crewNum > 0 ? crewNum : null;
@@ -1214,6 +1245,19 @@ function renderDurationCalcView(d) {
     ? `${fmtNum(ratio * 100, 1)}% (연간 ${detail.workable.toFixed(0)}/${detail.totalDays.toFixed(0)}일 작업 가능)`
     : `${fmtNum(ratio * 100, 1)}%`;
 
+  const meta = mdInfo.meta || getWorkTypeMeta("general");
+  const qtyLabel =
+    meta.key !== "general" ? `${meta.label} · 물량` : "총 작업량(인일)";
+
+  const qtyUnit = meta.key !== "general" ? meta.unit : "인일";
+
+  const derivedMdText =
+    manDays !== null && mdInfo.source === "quantity"
+      ? `환산 인일: ${fmtNum(manDays, 1)} 인일`
+      : manDays !== null && mdInfo.source === "mandays"
+      ? `입력 인일: ${fmtNum(manDays, 1)} 인일`
+      : "작업량을 입력하세요.";
+
   const resultBlock = `
     <div style="margin-top:14px;">
       <div style="font-weight:900; margin-bottom:8px;">결과</div>
@@ -1223,6 +1267,7 @@ function renderDurationCalcView(d) {
         </thead>
         <tbody>
           <tr><td>작업가능비율</td><td class="right"><b>${esc(ratioText)}</b></td></tr>
+          <tr><td>총 인일</td><td class="right"><b>${manDays !== null ? fmtNum(manDays, 1) + " 인일" : "—"}</b></td></tr>
           <tr><td>필요 작업일수</td><td class="right"><b>${workDaysNeeded !== null ? fmtNum(workDaysNeeded, 1) + " 일" : "—"}</b></td></tr>
           <tr><td>예상 공사기간(달력일)</td><td class="right"><b>${calendarDaysNeeded !== null ? fmtNum(calendarDaysNeeded, 0) + " 일" : "—"}</b></td></tr>
           ${
@@ -1233,6 +1278,7 @@ function renderDurationCalcView(d) {
           ${altHtml}
         </tbody>
       </table>
+      <div class="muted" style="margin-top:8px;">${esc(derivedMdText)}</div>
     </div>
   `;
 
@@ -1242,10 +1288,22 @@ function renderDurationCalcView(d) {
       <input type="number" data-duration-field="year" value="${esc(year)}"
         style="width:120px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;" />
 
-      <div style="font-weight:900;">총 작업량</div>
+      <div style="font-weight:900;">공종</div>
+      <select data-duration-field="workType"
+        style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+        ${DURATION_WORK_TYPES.map((x) => `<option value="${esc(x.key)}" ${durationCalcState.workType === x.key ? "selected" : ""}>${esc(x.label)}</option>`).join("")}
+      </select>
+
+      <div style="font-weight:900;">${esc(qtyLabel)}</div>
+      <input type="number" data-duration-field="quantity" value="${esc(durationCalcState.quantity)}"
+        placeholder="예: 1200"
+        style="width:180px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+      <span class="muted">${esc(qtyUnit)}</span>
+
+      <div class="muted" style="margin-left:6px;">(또는 인일 직접입력)</div>
       <input type="number" data-duration-field="manDays" value="${esc(durationCalcState.manDays)}"
         placeholder="인일(예: 4000)"
-        style="width:180px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+        style="width:170px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
       <span class="muted">인일</span>
     </div>
 
@@ -1597,11 +1655,10 @@ async function init() {
     infoEl.addEventListener("input", (e) => {
       const t = e.target;
 
-      // mat qty: 행 금액 + 합계 즉시 업데이트
+      // mat qty는 즉시 합계만 업데이트
       const k = t?.getAttribute?.("data-matqty");
       if (k) {
         matCalcState.qty[k] = t.value;
-        updateMatRowCost(k); // ✅ 추가
         updateMatTotal();
         return;
       }
