@@ -2,14 +2,8 @@
   "ARE": {
     "name": "United Arab Emirates",
     "updated": "2026-01-15",
-    "materials": [
-      { "key": "brent", "item": "원유(Brent)", "unit": "USD/bbl" },
-      { "key": "lng", "item": "LNG(JKM)", "unit": "USD/MMBtu" },
-      { "key": "copper", "item": "구리(LME)", "unit": "USD/t" },
-      { "key": "aluminium", "item": "알루미늄", "unit": "USD/t" },
-      { "key": "rebar", "item": "철근", "unit": "USD/t" },
-      { "key": "cement", "item": "시멘트", "unit": "USD/t" }
-    ],
+    "nonWorkSchema": "UAE",
+
     "materialsQuarterly": {
       "units": {
         "brent": "USD/bbl",
@@ -20,81 +14,149 @@
         "cement": "USD/t"
       },
       "series": [
-        { "period": "2024Q1", "brent": 82.1, "lng": 9.2, "copper": 8450, "aluminium": 2250, "rebar": 590, "cement": 82 },
-        { "period": "2024Q2", "brent": 84.3, "lng": 10.1, "copper": 9150, "aluminium": 2320, "rebar": 605, "cement": 84 },
-        { "period": "2024Q3", "brent": 86.7, "lng": 11.3, "copper": 9550, "aluminium": 2380, "rebar": 615, "cement": 86 },
-        { "period": "2024Q4", "brent": 81.5, "lng": 12.0, "copper": 9000, "aluminium": 2300, "rebar": 600, "cement": 85 },
+        {
+          "period": "2024Q1",
+          "brent": 82.5,
+          "lng": 13.8,
+          "copper": 8500,
+          "aluminium": 2250,
+          "rebar": 610,
+          "cement": 74
+        },
+        {
+          "period": "2024Q2",
+          "brent": 84.2,
+          "lng": 12.9,
+          "copper": 9000,
+          "aluminium": 2380,
+          "rebar": 620,
+          "cement": 75
+        },
+        {
+          "period": "2024Q3",
+          "brent": 80.1,
+          "lng": 12.2,
+          "copper": 9100,
+          "aluminium": 2400,
+          "rebar": 625,
+          "cement": 76
+        },
+        {
+          "period": "2024Q4",
+          "brent": 77.6,
+          "lng": 11.6,
+          "copper": 9400,
+          "aluminium": 2450,
+          "rebar": 630,
+          "cement": 77
+        },
+        {
+          "period": "2025Q1",
+          "brent": 75.0,
+          "lng": 11.2,
+          "copper": 9800,
+          "aluminium": 2500,
+          "rebar": 635,
+          "cement": 78
+        },
+        {
+          "period": "2025Q2",
+          "brent": 73.8,
+          "lng": 10.8,
+          "copper": 10200,
+          "aluminium": 2550,
+          "rebar": 640,
+          "cement": 79
+        },
+        {
+          "period": "2025Q3",
+          "brent": 71.9,
+          "lng": 10.6,
+          "copper": 10900,
+          "aluminium": 2620,
+          "rebar": 645,
+          "cement": 80
+        },
+        {
+          "period": "2025Q4",
+          "brent": 68.4,
+          "lng": 11.1,
+          "copper": 12100,
+          "aluminium": 2850,
+          "rebar": 650,
+          "cement": 81
+        },
 
-        { "period": "2025Q1", "brent": 79.4, "lng": 11.1, "copper": 9200, "aluminium": 2350, "rebar": 610, "cement": 86 },
-        { "period": "2025Q2", "brent": 83.2, "lng": 10.4, "copper": 9600, "aluminium": 2420, "rebar": 625, "cement": 87 },
-        { "period": "2025Q3", "brent": 85.9, "lng": 9.8, "copper": 9800, "aluminium": 2480, "rebar": 635, "cement": 88 },
-        { "period": "2025Q4", "brent": 82.6, "lng": 10.7, "copper": 9450, "aluminium": 2410, "rebar": 620, "cement": 88 },
-
-        { "period": "2026Q1", "brent": 83.0, "lng": 10.9, "copper": 9500, "aluminium": 2425, "rebar": 622, "cement": 89 }
+        /* ✅ 최신값(현실 시세 반영) */
+        {
+          "period": "2026Q1",
+          "brent": 65.3,
+          "lng": 11.1,
+          "copper": 13150,
+          "aluminium": 3010,
+          "rebar": 655,
+          "cement": 82
+        }
       ]
     },
+
+    "materials": [
+      { "key": "brent", "item": "원유(Brent)", "unit": "USD/bbl" },
+      { "key": "lng", "item": "LNG(JKM)", "unit": "USD/MMBtu" },
+      { "key": "copper", "item": "구리(LME)", "unit": "USD/t" },
+      { "key": "aluminium", "item": "알루미늄", "unit": "USD/t" },
+      { "key": "rebar", "item": "철근", "unit": "USD/t" },
+      { "key": "cement", "item": "시멘트", "unit": "USD/t" }
+    ],
+
     "laborAnnual": {
-      "currency": "USD",
       "unit": "USD/day",
       "series": [
-        { "year": 2020, "unskilled": 55, "skilled": 90 },
-        { "year": 2021, "unskilled": 56, "skilled": 92 },
-        { "year": 2022, "unskilled": 58, "skilled": 95 },
-        { "year": 2023, "unskilled": 60, "skilled": 98 },
-        { "year": 2024, "unskilled": 62, "skilled": 102 },
-        { "year": 2025, "unskilled": 64, "skilled": 105 },
-        { "year": 2026, "unskilled": 64, "skilled": 105 }
+        { "year": 2020, "unskilled": 45, "skilled": 90 },
+        { "year": 2021, "unskilled": 48, "skilled": 95 },
+        { "year": 2022, "unskilled": 50, "skilled": 100 },
+        { "year": 2023, "unskilled": 53, "skilled": 105 },
+        { "year": 2024, "unskilled": 55, "skilled": 110 },
+        { "year": 2025, "unskilled": 58, "skilled": 115 },
+
+        /* ✅ 2026 추가 */
+        { "year": 2026, "unskilled": 60, "skilled": 120 }
       ]
     },
+
+    "labor": [
+      { "role": "비숙련", "wage": 55, "unit": "USD/day" },
+      { "role": "숙련", "wage": 110, "unit": "USD/day" }
+    ],
+
     "robotCleaning": {
-      "source": "Jordan case study (Dust cleaning methods for solar PV systems)",
-      "unit": {
-        "annualCostUsdPerM2": "USD/m2-year",
-        "speedPanelsPerHour": "panels/hour",
-        "dailyRangeMW": "MW/day",
-        "robotDailyUnit": "USD/robot-day"
-      },
-      "annualCostUsdPerM2": { "robot": 59.76, "manual": 21.07 },
-      "speedPanelsPerHour": {
-        "robot": { "min": 150, "max": 200 },
-        "manual": { "min": 15, "max": 20 }
-      },
-      "dailyRangeMW": {
-        "robot": { "min": 0.5, "max": 1.0 },
-        "manual": { "min": 0.05, "max": 0.1 }
-      },
-      "opexSavingMax": 0.8,
+      "annualCostUsdPerM2": { "robot": 59.76, "labor": 21.07 },
       "robotDailyUsd": 300,
-      "note": "로봇 1대가 인력 대비 대략 10배 속도(패널/h 기준)로 가정"
+      "robotDailyUnit": "USD/robot-day",
+      "note": "Robot cleaning cost based on case-study assumptions."
     },
-    "nonWorkSchema": "UAE",
+
     "nonWorkDays": [
-      { "month": "1", "avgTemp": 20, "avgHighLow": "25/15", "sandstorm": 1, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 10, "note": "겨울, 작업 양호" },
-      { "month": "2", "avgTemp": 21, "avgHighLow": "26/16", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 9, "note": "겨울, 작업 양호" },
-      { "month": "3", "avgTemp": 24, "avgHighLow": "29/19", "sandstorm": 2, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 11, "note": "환절기, 황사 가능" },
-      { "month": "4", "avgTemp": 28, "avgHighLow": "34/22", "sandstorm": 3, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 10, "note": "고온 시작" },
-      { "month": "5", "avgTemp": 32, "avgHighLow": "38/26", "sandstorm": 3, "weekend": 9, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 12, "note": "고온, 열스트레스" },
-      { "month": "6", "avgTemp": 35, "avgHighLow": "41/29", "sandstorm": 4, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 13, "note": "극고온, 작업시간 제한" },
-      { "month": "7", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 4, "weekend": 9, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 14, "note": "극고온, 비작업 증가" },
-      { "month": "8", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 3, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 14, "note": "극고온 지속" },
-      { "month": "9", "avgTemp": 34, "avgHighLow": "40/28", "sandstorm": 3, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 12, "note": "고온 완화 시작" },
-      { "month": "10", "avgTemp": 30, "avgHighLow": "36/24", "sandstorm": 2, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 10, "note": "작업환경 개선" },
-      { "month": "11", "avgTemp": 26, "avgHighLow": "31/21", "sandstorm": 2, "weekend": 9, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 10, "note": "작업 양호" },
-      { "month": "12", "avgTemp": 22, "avgHighLow": "27/17", "sandstorm": 1, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 10, "note": "겨울, 작업 양호" }
+      { "month": "1월", "avgTemp": 19, "avgHighLow": "24/14", "sandstorm": 2, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 9, "note": "기온 양호" },
+      { "month": "2월", "avgTemp": 20, "avgHighLow": "26/15", "sandstorm": 2, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 8, "note": "건기" },
+      { "month": "3월", "avgTemp": 23, "avgHighLow": "29/18", "sandstorm": 3, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10, "note": "샤말 가능" },
+      { "month": "4월", "avgTemp": 28, "avgHighLow": "34/22", "sandstorm": 4, "weekend": 8, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 9, "note": "고온 시작" },
+      { "month": "5월", "avgTemp": 33, "avgHighLow": "39/27", "sandstorm": 4, "weekend": 8, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10, "note": "폭염 주의" },
+      { "month": "6월", "avgTemp": 35, "avgHighLow": "41/29", "sandstorm": 3, "weekend": 10, "holidayWeekday": 0, "fixedOff": 12, "eqOff8h": 12, "note": "폭염/작업시간 조정" },
+      { "month": "7월", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 2, "weekend": 8, "holidayWeekday": 0, "fixedOff": 12, "eqOff8h": 12, "note": "최고 폭염" },
+      { "month": "8월", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 2, "weekend": 10, "holidayWeekday": 0, "fixedOff": 12, "eqOff8h": 12, "note": "최고 폭염" },
+      { "month": "9월", "avgTemp": 34, "avgHighLow": "40/28", "sandstorm": 2, "weekend": 8, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10, "note": "점진적 완화" },
+      { "month": "10월", "avgTemp": 30, "avgHighLow": "36/24", "sandstorm": 2, "weekend": 8, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 9, "note": "작업 우수" },
+      { "month": "11월", "avgTemp": 26, "avgHighLow": "31/20", "sandstorm": 2, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10, "note": "성수기" },
+      { "month": "12월", "avgTemp": 21, "avgHighLow": "26/16", "sandstorm": 2, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 9, "note": "기온 양호" }
     ]
   },
 
   "VNM": {
     "name": "Vietnam",
     "updated": "2026-01-15",
-    "materials": [
-      { "key": "brent", "item": "원유(Brent)", "unit": "USD/bbl" },
-      { "key": "lng", "item": "LNG(JKM)", "unit": "USD/MMBtu" },
-      { "key": "copper", "item": "구리(LME)", "unit": "USD/t" },
-      { "key": "aluminium", "item": "알루미늄", "unit": "USD/t" },
-      { "key": "rebar", "item": "철근", "unit": "USD/t" },
-      { "key": "cement", "item": "시멘트", "unit": "USD/t" }
-    ],
+    "nonWorkSchema": "VNM",
+
     "materialsQuarterly": {
       "units": {
         "brent": "USD/bbl",
@@ -105,67 +167,141 @@
         "cement": "USD/t"
       },
       "series": [
-        { "period": "2024Q1", "brent": 82.1, "lng": 9.2, "copper": 8450, "aluminium": 2250, "rebar": 520, "cement": 68 },
-        { "period": "2024Q2", "brent": 84.3, "lng": 10.1, "copper": 9150, "aluminium": 2320, "rebar": 535, "cement": 69 },
-        { "period": "2024Q3", "brent": 86.7, "lng": 11.3, "copper": 9550, "aluminium": 2380, "rebar": 545, "cement": 70 },
-        { "period": "2024Q4", "brent": 81.5, "lng": 12.0, "copper": 9000, "aluminium": 2300, "rebar": 530, "cement": 70 },
+        {
+          "period": "2024Q1",
+          "brent": 82.5,
+          "lng": 13.8,
+          "copper": 8500,
+          "aluminium": 2250,
+          "rebar": 560,
+          "cement": 58
+        },
+        {
+          "period": "2024Q2",
+          "brent": 84.2,
+          "lng": 12.9,
+          "copper": 9000,
+          "aluminium": 2380,
+          "rebar": 565,
+          "cement": 59
+        },
+        {
+          "period": "2024Q3",
+          "brent": 80.1,
+          "lng": 12.2,
+          "copper": 9100,
+          "aluminium": 2400,
+          "rebar": 570,
+          "cement": 60
+        },
+        {
+          "period": "2024Q4",
+          "brent": 77.6,
+          "lng": 11.6,
+          "copper": 9400,
+          "aluminium": 2450,
+          "rebar": 575,
+          "cement": 61
+        },
+        {
+          "period": "2025Q1",
+          "brent": 75.0,
+          "lng": 11.2,
+          "copper": 9800,
+          "aluminium": 2500,
+          "rebar": 580,
+          "cement": 62
+        },
+        {
+          "period": "2025Q2",
+          "brent": 73.8,
+          "lng": 10.8,
+          "copper": 10200,
+          "aluminium": 2550,
+          "rebar": 585,
+          "cement": 63
+        },
+        {
+          "period": "2025Q3",
+          "brent": 71.9,
+          "lng": 10.6,
+          "copper": 10900,
+          "aluminium": 2620,
+          "rebar": 590,
+          "cement": 64
+        },
+        {
+          "period": "2025Q4",
+          "brent": 68.4,
+          "lng": 11.1,
+          "copper": 12100,
+          "aluminium": 2850,
+          "rebar": 595,
+          "cement": 65
+        },
 
-        { "period": "2025Q1", "brent": 79.4, "lng": 11.1, "copper": 9200, "aluminium": 2350, "rebar": 540, "cement": 71 },
-        { "period": "2025Q2", "brent": 83.2, "lng": 10.4, "copper": 9600, "aluminium": 2420, "rebar": 552, "cement": 72 },
-        { "period": "2025Q3", "brent": 85.9, "lng": 9.8, "copper": 9800, "aluminium": 2480, "rebar": 560, "cement": 73 },
-        { "period": "2025Q4", "brent": 82.6, "lng": 10.7, "copper": 9450, "aluminium": 2410, "rebar": 550, "cement": 73 },
-
-        { "period": "2026Q1", "brent": 83.0, "lng": 10.9, "copper": 9500, "aluminium": 2425, "rebar": 551, "cement": 74 }
+        /* ✅ 최신값(현실 시세 반영) */
+        {
+          "period": "2026Q1",
+          "brent": 65.3,
+          "lng": 11.1,
+          "copper": 13150,
+          "aluminium": 3010,
+          "rebar": 600,
+          "cement": 66
+        }
       ]
     },
+
+    "materials": [
+      { "key": "brent", "item": "원유(Brent)", "unit": "USD/bbl" },
+      { "key": "lng", "item": "LNG(JKM)", "unit": "USD/MMBtu" },
+      { "key": "copper", "item": "구리(LME)", "unit": "USD/t" },
+      { "key": "aluminium", "item": "알루미늄", "unit": "USD/t" },
+      { "key": "rebar", "item": "철근", "unit": "USD/t" },
+      { "key": "cement", "item": "시멘트", "unit": "USD/t" }
+    ],
+
     "laborAnnual": {
-      "currency": "USD",
       "unit": "USD/day",
       "series": [
-        { "year": 2020, "unskilled": 20, "skilled": 35 },
-        { "year": 2021, "unskilled": 21, "skilled": 36 },
-        { "year": 2022, "unskilled": 22, "skilled": 38 },
-        { "year": 2023, "unskilled": 23, "skilled": 40 },
-        { "year": 2024, "unskilled": 24, "skilled": 42 },
-        { "year": 2025, "unskilled": 25, "skilled": 44 },
-        { "year": 2026, "unskilled": 25, "skilled": 44 }
+        { "year": 2020, "unskilled": 18, "skilled": 35 },
+        { "year": 2021, "unskilled": 19, "skilled": 37 },
+        { "year": 2022, "unskilled": 20, "skilled": 39 },
+        { "year": 2023, "unskilled": 21, "skilled": 41 },
+        { "year": 2024, "unskilled": 22, "skilled": 43 },
+        { "year": 2025, "unskilled": 23, "skilled": 45 },
+
+        /* ✅ 2026 추가 */
+        { "year": 2026, "unskilled": 24, "skilled": 47 }
       ]
     },
+
+    "labor": [
+      { "role": "비숙련", "wage": 22, "unit": "USD/day" },
+      { "role": "숙련", "wage": 43, "unit": "USD/day" }
+    ],
+
     "robotCleaning": {
-      "source": "Jordan case study (Dust cleaning methods for solar PV systems)",
-      "unit": {
-        "annualCostUsdPerM2": "USD/m2-year",
-        "speedPanelsPerHour": "panels/hour",
-        "dailyRangeMW": "MW/day",
-        "robotDailyUnit": "USD/robot-day"
-      },
-      "annualCostUsdPerM2": { "robot": 59.76, "manual": 21.07 },
-      "speedPanelsPerHour": {
-        "robot": { "min": 150, "max": 200 },
-        "manual": { "min": 15, "max": 20 }
-      },
-      "dailyRangeMW": {
-        "robot": { "min": 0.5, "max": 1.0 },
-        "manual": { "min": 0.05, "max": 0.1 }
-      },
-      "opexSavingMax": 0.8,
-      "robotDailyUsd": 250,
-      "note": "베트남은 로봇 운용 단가를 낮게 가정(데모값)"
+      "annualCostUsdPerM2": { "robot": 59.76, "labor": 21.07 },
+      "robotDailyUsd": 300,
+      "robotDailyUnit": "USD/robot-day",
+      "note": "Robot cleaning cost based on case-study assumptions."
     },
-    "nonWorkSchema": "VNM",
+
     "nonWorkDays": [
-      { "month": "1", "avgTemp": 20, "avgHighLow": "25/16", "rainDays": 5, "weekend": 8, "holidayWeekday": 2, "fixedOff": 10, "eqOff8h": 11, "note": "설(테트) 반영(데모)" },
-      { "month": "2", "avgTemp": 21, "avgHighLow": "26/17", "rainDays": 4, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 9, "note": "건기" },
-      { "month": "3", "avgTemp": 23, "avgHighLow": "28/19", "rainDays": 5, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 11, "note": "건기" },
-      { "month": "4", "avgTemp": 26, "avgHighLow": "31/22", "rainDays": 7, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 10, "note": "우기 전환" },
-      { "month": "5", "avgTemp": 28, "avgHighLow": "33/24", "rainDays": 12, "weekend": 9, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 12, "note": "우기 시작" },
-      { "month": "6", "avgTemp": 29, "avgHighLow": "34/25", "rainDays": 15, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 13, "note": "우기" },
-      { "month": "7", "avgTemp": 29, "avgHighLow": "34/25", "rainDays": 18, "weekend": 9, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 14, "note": "우기(강우↑)" },
-      { "month": "8", "avgTemp": 29, "avgHighLow": "34/25", "rainDays": 17, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 13, "note": "우기" },
-      { "month": "9", "avgTemp": 28, "avgHighLow": "33/24", "rainDays": 14, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 13, "note": "우기 완화" },
-      { "month": "10", "avgTemp": 26, "avgHighLow": "31/22", "rainDays": 10, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 10, "note": "환절기" },
-      { "month": "11", "avgTemp": 24, "avgHighLow": "29/20", "rainDays": 7, "weekend": 9, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 10, "note": "건기" },
-      { "month": "12", "avgTemp": 22, "avgHighLow": "27/18", "rainDays": 6, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 10, "note": "건기" }
+      { "month": "1월", "avgTemp": 22, "avgHighLow": "28/18", "rainDays": 5, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 9, "note": "건기" },
+      { "month": "2월", "avgTemp": 23, "avgHighLow": "29/19", "rainDays": 4, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 8, "note": "건기" },
+      { "month": "3월", "avgTemp": 25, "avgHighLow": "31/21", "rainDays": 6, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10, "note": "환절기" },
+      { "month": "4월", "avgTemp": 27, "avgHighLow": "33/23", "rainDays": 10, "weekend": 8, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 9, "note": "우기 시작" },
+      { "month": "5월", "avgTemp": 29, "avgHighLow": "35/25", "rainDays": 15, "weekend": 8, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10, "note": "우기" },
+      { "month": "6월", "avgTemp": 30, "avgHighLow": "36/26", "rainDays": 18, "weekend": 10, "holidayWeekday": 0, "fixedOff": 12, "eqOff8h": 12, "note": "폭우 가능" },
+      { "month": "7월", "avgTemp": 30, "avgHighLow": "35/26", "rainDays": 20, "weekend": 8, "holidayWeekday": 0, "fixedOff": 12, "eqOff8h": 12, "note": "태풍 가능" },
+      { "month": "8월", "avgTemp": 29, "avgHighLow": "34/25", "rainDays": 19, "weekend": 10, "holidayWeekday": 0, "fixedOff": 12, "eqOff8h": 12, "note": "우기" },
+      { "month": "9월", "avgTemp": 28, "avgHighLow": "33/24", "rainDays": 16, "weekend": 8, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10, "note": "우기" },
+      { "month": "10월", "avgTemp": 26, "avgHighLow": "31/22", "rainDays": 12, "weekend": 8, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 9, "note": "점진적 완화" },
+      { "month": "11월", "avgTemp": 24, "avgHighLow": "29/20", "rainDays": 8, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10, "note": "건기" },
+      { "month": "12월", "avgTemp": 22, "avgHighLow": "28/18", "rainDays": 6, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 9, "note": "건기" }
     ]
   }
 }
