@@ -4,6 +4,10 @@
 // ✅ 인건비 계산(laborcalc): 총 인일 + 프리미엄 + 로봇 투입(대체율/로봇단가/대체 인일) → 절감효과 계산
 // ✅ 공사기간 계산(duration): 비작업일수 기반 작업가능비율 추정 → 작업일수/달력일수/필요인원 계산
 //
+// ✅ 변경사항(요청사항)
+// - 공사기간 계산에서 "12명/40명" 프리셋 버튼 삭제
+// - 해당 버튼 클릭 처리 로직 삭제
+//
 // [countrydata.json 권장 구조]
 // - laborAnnual: { unit:"USD/day", series:[{year, unskilled, skilled}, ...] }
 // - robotCleaning: {
@@ -367,7 +371,6 @@ function getMaterialUnitPrice(d, key, period) {
 }
 
 // ============== labor utilities (연도별 지원) ==============
-
 function listLaborYears(d) {
   const s = d?.laborAnnual?.series;
   if (!Array.isArray(s) || !s.length) return [];
@@ -409,21 +412,16 @@ function getLaborWageByYear(d, role, year) {
 }
 
 // ============== robot helpers ==============
-
 // 표 기준: 로봇/인력 속도 10배 → 로봇 1대·일 대체 인일 기본 10
 function getRobotReplaceManDaysPerRobotDayDefault() {
   return 10;
 }
 
-// ✅ 로봇 일단가 기본값: countrydata에 있으면 사용, 없으면 300
-// ✅ (수정) 0 또는 음수면 무조건 300 fallback
+// 로봇 일단가 기본값: countrydata에 있으면 사용, 없으면 300 (표 기반 환산에 부합)
 function getRobotDailyUsdDefault(d) {
-  const fromData =
-    toNum(d?.robotCleaning?.robotDailyUsd) ??
-    toNum(d?.robotDailyUSD) ??
-    null;
-
-  return fromData !== null && fromData > 0 ? fromData : 300;
+  // 사용자가 input으로 넣은 값이 있으면 그것이 최우선(계산 함수에서 처리)
+  const fromData = toNum(d?.robotCleaning?.robotDailyUsd) ?? toNum(d?.robotDailyUSD) ?? null;
+  return fromData !== null ? fromData : 300;
 }
 
 // ============== CSV export ==============
@@ -747,12 +745,9 @@ function computeLaborCalc(d) {
     effectiveWage !== null && totalManDays !== null ? effectiveWage * totalManDays : null;
 
   // ✅ 로봇 1대·일 단가 (기본 300 USD/day)
-  // ✅ (수정) 입력이 0/빈값이면 무시하고 기본값 사용
-  const robotDailyOverride = toNum(laborCalcState.robotDailyUsd);
   const robotDailyDefault =
-    robotDailyOverride !== null && robotDailyOverride > 0
-      ? robotDailyOverride
-      : getRobotDailyUsdDefault(d);
+    toNum(laborCalcState.robotDailyUsd) ??
+    getRobotDailyUsdDefault(d);
 
   if (!laborCalcState.robotUse) {
     return {
@@ -1156,10 +1151,6 @@ function renderDurationCalcView(d) {
           <input type="number" min="1" data-duration-field="crew" value="${esc(durationCalcState.crew)}"
             style="width:140px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
           <span class="muted">명</span>
-          <button type="button" data-duration-preset="12"
-            style="padding:8px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;">12명</button>
-          <button type="button" data-duration-preset="40"
-            style="padding:8px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer;">40명</button>
         </div>
       </div>
 
@@ -1409,13 +1400,7 @@ async function init() {
         return;
       }
 
-      // 공사기간 계산 - 인원 프리셋
-      const preset = e.target.closest("button[data-duration-preset]");
-      if (preset) {
-        durationCalcState.crew = preset.dataset.durationPreset;
-        renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
-        return;
-      }
+      // ✅ (삭제됨) 공사기간 계산 - 인원 프리셋 버튼 처리
     });
 
     // ✅ change 이벤트
