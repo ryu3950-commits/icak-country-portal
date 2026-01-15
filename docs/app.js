@@ -2,12 +2,18 @@
 // ✅ 공사원가(costs): "로봇 세척 비용" 블록 제거 → 인건비 블록에서만 로봇 가격 표시
 // ✅ 인건비: countrydata의 laborAnnual(연도별) 있으면 연도 선택 가능 + 없으면 labor(기존) fallback
 // ✅ 인건비 계산(laborcalc): 총 인일 + 프리미엄 + 로봇 투입(대체율/로봇단가/대체 인일) → 절감효과 계산
-// ✅ 공사기간 계산(duration): 비작업일수 기반 작업가능비율 추정 → 작업일수/달력일수/필요인원/야간필요여부 계산
+// ✅ 공사기간 계산(duration): 비작업일수 기반 작업가능비율 추정 → 작업일수/달력일수/필요인원 계산
+// ✅ 공사기간 결과: 목표기간이 빡빡할 경우 "인원 증원" / "주야간 전환" 대안 자동 제시
+// ✅ 입력 끊김 해결: 디바운스 + 포커스/커서 복원
 //
-// ✅ 변경사항(이번 요청 반영)
-// - 공사기간 계산: 목표기간 "선택 드롭다운" 추가
-// - 공사기간 결과: "야간작업 필요 여부 + 추정 야간비중(%)" 출력 추가
-// - 목표기간 input 입력 중 1→8→0 문제 해결: input 이벤트에서 화면 전체 rerender 제거(결과만 즉시 업데이트)
+// [countrydata.json 권장 구조]
+// - laborAnnual: { unit:"USD/day", series:[{year, unskilled, skilled}, ...] }
+// - robotCleaning: {
+//     annualCostUsdPerM2:{robot, labor},     // (PDF 기반) USD/m²·year
+//     robotDailyUsd: 300,                    // 로봇 1대·일 단가(USD/day)
+//     robotDailyUnit:"USD/robot-day",
+//     note:"..."
+//   }
 
 const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
 
@@ -75,7 +81,6 @@ let durationCalcState = {
   shiftMode: "day", // day | daynight
   overtimePremium: "1.0", // 1.0 | 1.25 | 1.5
   targetCalendarDays: "", // 목표 공사기간(달력일) - 선택
-  targetPreset: "", // ✅ 추가: 드롭다운 선택값
 };
 
 // 인건비 계산 상태(로봇 포함)
@@ -364,6 +369,7 @@ function getMaterialUnitPrice(d, key, period) {
 }
 
 // ============== labor utilities (연도별 지원) ==============
+
 function listLaborYears(d) {
   const s = d?.laborAnnual?.series;
   if (!Array.isArray(s) || !s.length) return [];
@@ -405,13 +411,15 @@ function getLaborWageByYear(d, role, year) {
 }
 
 // ============== robot helpers ==============
+
 // 표 기준: 로봇/인력 속도 10배 → 로봇 1대·일 대체 인일 기본 10
 function getRobotReplaceManDaysPerRobotDayDefault() {
   return 10;
 }
 
-// 로봇 일단가 기본값: countrydata에 있으면 사용, 없으면 300
+// 로봇 일단가 기본값: countrydata에 있으면 사용, 없으면 300 (표 기반 환산에 부합)
 function getRobotDailyUsdDefault(d) {
+  // 사용자가 input으로 넣은 값이 있으면 그것이 최우선(계산 함수에서 처리)
   const fromData = toNum(d?.robotCleaning?.robotDailyUsd) ?? toNum(d?.robotDailyUSD) ?? null;
   return fromData !== null ? fromData : 300;
 }
@@ -708,10 +716,10 @@ function updateMatTotal() {
 
 // ============== laborcalc (계산) ==============
 const LABOR_PREM = {
-  high: 1.15,
-  electrical: 1.10,
-  daynight: 1.25,
-  equip: 1.05,
+  high: 1.15,       // 고소작업
+  electrical: 1.10, // 전기설비 근접
+  daynight: 1.25,   // 주야간
+  equip: 1.05,      // 장비 포함
 };
 
 function computeLaborCalc(d) {
@@ -736,9 +744,12 @@ function computeLaborCalc(d) {
   const laborCostNoRobot =
     effectiveWage !== null && totalManDays !== null ? effectiveWage * totalManDays : null;
 
-  const robotDailyDefault =
+  // ✅ 로봇 1대·일 단가 (기본 300 USD/day) - 0/음수 방어
+  const rawRobotDaily =
     toNum(laborCalcState.robotDailyUsd) ??
     getRobotDailyUsdDefault(d);
+
+  const robotDailyDefault = rawRobotDaily !== null && rawRobotDaily > 0 ? rawRobotDaily : getRobotDailyUsdDefault(d);
 
   if (!laborCalcState.robotUse) {
     return {
@@ -757,6 +768,7 @@ function computeLaborCalc(d) {
 
   const robots = Math.max(1, toNum(laborCalcState.robots) ?? 1);
 
+  // ✅ 기본 10 인일/대·일 (표의 10배 속도 기준)
   const mdPerRobotDay = Math.max(
     0.0001,
     toNum(laborCalcState.replaceManDaysPerRobotDay) ?? getRobotReplaceManDaysPerRobotDayDefault()
@@ -866,7 +878,27 @@ function renderLaborCalcView(d) {
     `;
   })();
 
-  const resultRows = buildLaborResultRows(d); // ✅ 결과 rows를 함수화해서 "부분 업데이트" 가능
+  const resultRows = (() => {
+    const r = res.robot;
+    if (!r) {
+      return `
+        <tr><td>인건비(로봇 미사용)</td><td class="right"><b>${res.laborCostNoRobot !== null ? fmtNum(res.laborCostNoRobot, 2) + " USD" : "—"}</b></td></tr>
+      `;
+    }
+
+    return `
+      <tr><td>인건비(로봇 미사용)</td><td class="right"><b>${res.laborCostNoRobot !== null ? fmtNum(res.laborCostNoRobot, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td><b>로봇 대체(세척 시)</b></td><td class="right"><b>${r.mdPerRobotDay !== null ? fmtNum(r.mdPerRobotDay, 1) + " 인일/대·일" : "—"}</b></td></tr>
+      <tr><td>로봇 대체 인일</td><td class="right"><b>${r.replaceManDays !== null ? fmtNum(r.replaceManDays, 1) + " 인일" : "—"}</b></td></tr>
+      <tr><td>로봇 필요 대수·일(총)</td><td class="right"><b>${r.robotTotalDays !== null ? fmtNum(r.robotTotalDays, 1) + " 대·일" : "—"}</b></td></tr>
+      <tr><td>로봇 운영기간(대수 고려)</td><td class="right"><b>${r.robotFleetCalendarDays !== null ? fmtNum(r.robotFleetCalendarDays, 1) + " 일" : "—"}</b></td></tr>
+      <tr><td>인건비(로봇 사용 후)</td><td class="right"><b>${r.laborCostWithRobot !== null ? fmtNum(r.laborCostWithRobot, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td>로봇 비용</td><td class="right"><b>${r.robotCost !== null ? fmtNum(r.robotCost, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td>총비용(인건비+로봇)</td><td class="right"><b>${r.totalCostWithRobot !== null ? fmtNum(r.totalCostWithRobot, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td>절감액</td><td class="right"><b>${r.saving !== null ? fmtNum(r.saving, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td>절감률</td><td class="right"><b>${r.savingRate !== null ? fmtNum(r.savingRate * 100, 1) + "%" : "—"}</b></td></tr>
+    `;
+  })();
 
   return `
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -941,35 +973,11 @@ function renderLaborCalcView(d) {
       <div style="font-weight:900; margin-bottom:8px;">결과</div>
       <table class="table">
         <thead><tr><th>항목</th><th class="right">값</th></tr></thead>
-        <tbody id="laborResultBody">
+        <tbody>
           ${resultRows}
         </tbody>
       </table>
     </div>
-  `;
-}
-
-function buildLaborResultRows(d) {
-  const res = computeLaborCalc(d);
-
-  if (!res.robot) {
-    return `
-      <tr><td>인건비(로봇 미사용)</td><td class="right"><b>${res.laborCostNoRobot !== null ? fmtNum(res.laborCostNoRobot, 2) + " USD" : "—"}</b></td></tr>
-    `;
-  }
-
-  const r = res.robot;
-  return `
-    <tr><td>인건비(로봇 미사용)</td><td class="right"><b>${res.laborCostNoRobot !== null ? fmtNum(res.laborCostNoRobot, 2) + " USD" : "—"}</b></td></tr>
-    <tr><td><b>로봇 대체(세척 시)</b></td><td class="right"><b>${r.mdPerRobotDay !== null ? fmtNum(r.mdPerRobotDay, 1) + " 인일/대·일" : "—"}</b></td></tr>
-    <tr><td>로봇 대체 인일</td><td class="right"><b>${r.replaceManDays !== null ? fmtNum(r.replaceManDays, 1) + " 인일" : "—"}</b></td></tr>
-    <tr><td>로봇 필요 대수·일(총)</td><td class="right"><b>${r.robotTotalDays !== null ? fmtNum(r.robotTotalDays, 1) + " 대·일" : "—"}</b></td></tr>
-    <tr><td>로봇 운영기간(대수 고려)</td><td class="right"><b>${r.robotFleetCalendarDays !== null ? fmtNum(r.robotFleetCalendarDays, 1) + " 일" : "—"}</b></td></tr>
-    <tr><td>인건비(로봇 사용 후)</td><td class="right"><b>${r.laborCostWithRobot !== null ? fmtNum(r.laborCostWithRobot, 2) + " USD" : "—"}</b></td></tr>
-    <tr><td>로봇 비용</td><td class="right"><b>${r.robotCost !== null ? fmtNum(r.robotCost, 2) + " USD" : "—"}</b></td></tr>
-    <tr><td>총비용(인건비+로봇)</td><td class="right"><b>${r.totalCostWithRobot !== null ? fmtNum(r.totalCostWithRobot, 2) + " USD" : "—"}</b></td></tr>
-    <tr><td>절감액</td><td class="right"><b>${r.saving !== null ? fmtNum(r.saving, 2) + " USD" : "—"}</b></td></tr>
-    <tr><td>절감률</td><td class="right"><b>${r.savingRate !== null ? fmtNum(r.savingRate * 100, 1) + "%" : "—"}</b></td></tr>
   `;
 }
 
@@ -1083,35 +1091,19 @@ function computeWorkabilityRatio(d, year) {
   };
 }
 
-// ✅ 주야간(예시) 생산성 배수(보수적으로 1.6)
 function getShiftMultiplier(mode) {
   if (mode === "daynight") return 1.6;
   return 1.0;
 }
 
-// ✅ 목표기간을 만족하기 위해 필요한 "생산성 배수" 계산
-function requiredShiftMultiplier(manDays, crew, ot, targetCal, ratio) {
-  if (![manDays, crew, ot, targetCal, ratio].every((x) => typeof x === "number" && isFinite(x))) return null;
-  if (crew <= 0 || ot <= 0 || targetCal <= 0 || ratio <= 0) return null;
-  return manDays / (crew * ot * targetCal * ratio);
-}
-
-// ✅ 주간(1.0)~주야간(1.6) 사이에서 "야간 비중(%)"을 단순 추정
-function estimateNightShare(reqMult) {
-  const day = 1.0;
-  const dn = 1.6;
-  if (!isFinite(reqMult)) return null;
-  if (reqMult <= day) return 0;
-  if (reqMult >= dn) return 100;
-  return ((reqMult - day) / (dn - day)) * 100;
-}
-
-function computeDurationCalc(d) {
+// ✅ (수정) duration 결과에 "증원/주야간 전환" 대안 표시 + 입력 끊김 방지 대응
+function renderDurationCalcView(d) {
   const year = Number(durationCalcState.year) || new Date().getFullYear();
   const manDays = toNum(durationCalcState.manDays);
   const crew = Math.max(1, toNum(durationCalcState.crew) ?? 40);
   const ot = Math.max(1, toNum(durationCalcState.overtimePremium) ?? 1.0);
-  const shiftM = getShiftMultiplier(durationCalcState.shiftMode);
+  const shiftMode = durationCalcState.shiftMode || "day";
+  const shiftM = getShiftMultiplier(shiftMode);
 
   const { ratio, detail } = computeWorkabilityRatio(d, year);
 
@@ -1120,95 +1112,97 @@ function computeDurationCalc(d) {
 
   const targetCal = toNum(durationCalcState.targetCalendarDays);
 
-  // 목표 달력일 기준 필요 인원(현재 shiftMode/OT 유지)
-  const crewNeeded =
-    manDays !== null && targetCal !== null && targetCal > 0 ? manDays / (targetCal * ratio * shiftM * ot) : null;
+  // ✅ 목표 달력일 입력 시 필요한 인원 계산(주간/주야간)
+  const crewNeededDay =
+    manDays !== null && targetCal !== null && targetCal > 0
+      ? manDays / (targetCal * ratio * 1.0 * ot)
+      : null;
 
-  // ✅ 야간 필요 여부(주간 기준으로 목표기간을 맞추려면 주야간이 필요한지)
-  // - "야간 필요" 판단은 '주간(1.0) 기준 reqMult > 1'일 때
-  // - 추정 야간비중: 1.0~1.6 범위에서 선형으로 환산
-  let nightRequired = null; // true/false
-  let nightSharePct = null; // 0~100
-  let reqMultDayBase = null; // 주간 기준 요구 배수
+  const crewNeededDayNight =
+    manDays !== null && targetCal !== null && targetCal > 0
+      ? manDays / (targetCal * ratio * 1.6 * ot)
+      : null;
 
+  // ✅ 대안 판단
+  let altHtml = "";
   if (manDays !== null && targetCal !== null && targetCal > 0) {
-    reqMultDayBase = requiredShiftMultiplier(manDays, crew, ot, targetCal, ratio);
-    if (reqMultDayBase !== null) {
-      nightRequired = reqMultDayBase > 1.0001; // 주간으로 부족하면 야간 필요
-      nightSharePct = estimateNightShare(reqMultDayBase);
+    const feasibleNow = calendarDaysNeeded !== null ? calendarDaysNeeded <= targetCal : false;
+
+    const addCrewDay =
+      crewNeededDay !== null ? Math.max(0, Math.ceil(crewNeededDay) - crew) : null;
+
+    const addCrewDayNight =
+      crewNeededDayNight !== null ? Math.max(0, Math.ceil(crewNeededDayNight) - crew) : null;
+
+    const needNight = crewNeededDay !== null ? Math.ceil(crewNeededDay) > crew : false;
+
+    if (feasibleNow) {
+      altHtml = `
+        <tr><td><b>야간 작업 필요</b></td><td class="right"><b>필요 없음</b></td></tr>
+        <tr><td><b>대안</b></td><td class="right"><b>현재 조건으로 목표기간 달성 가능</b></td></tr>
+      `;
+    } else {
+      altHtml = `
+        <tr><td><b>야간 작업 필요</b></td><td class="right"><b>${needNight ? "필요(권장)" : "선택"}</b></td></tr>
+
+        <tr>
+          <td><b>대안(주간 유지)</b></td>
+          <td class="right">
+            ${addCrewDay !== null
+              ? `<b>인원 +${fmtNum(addCrewDay, 0)}명</b> 필요 (총 ${fmtNum(Math.ceil(crewNeededDay), 0)}명)`
+              : "—"}
+          </td>
+        </tr>
+
+        <tr>
+          <td><b>대안(주야간 전환)</b></td>
+          <td class="right">
+            ${
+              crewNeededDayNight !== null
+                ? `<b>주야간 적용 시</b> 필요 인원 ${fmtNum(Math.ceil(crewNeededDayNight), 0)}명`
+                : "—"
+            }
+            ${
+              addCrewDayNight !== null
+                ? `<div class="muted" style="margin-top:4px;">(현재 ${crew}명 기준: +${fmtNum(addCrewDayNight, 0)}명)</div>`
+                : ""
+            }
+          </td>
+        </tr>
+      `;
     }
   }
 
-  return {
-    year,
-    manDays,
-    crew,
-    ot,
-    shiftMode: durationCalcState.shiftMode,
-    shiftM,
-    ratio,
-    ratioDetail: detail,
-    workDaysNeeded,
-    calendarDaysNeeded,
-    targetCal,
-    crewNeeded,
-    nightRequired,
-    nightSharePct,
-    reqMultDayBase,
-  };
-}
+  const ratioText = detail
+    ? `${fmtNum(ratio * 100, 1)}% (연간 ${detail.workable.toFixed(0)}/${detail.totalDays.toFixed(0)}일 작업 가능)`
+    : `${fmtNum(ratio * 100, 1)}%`;
 
-function buildDurationResultRows(d) {
-  const r = computeDurationCalc(d);
-
-  const ratioText = r.ratioDetail
-    ? `${fmtNum(r.ratio * 100, 1)}% (연간 ${r.ratioDetail.workable.toFixed(0)}/${r.ratioDetail.totalDays.toFixed(0)}일 작업 가능)`
-    : `${fmtNum(r.ratio * 100, 1)}%`;
-
-  // 야간 결과 문구
-  let nightText = "—";
-  if (r.targetCal !== null && r.manDays !== null) {
-    if (r.nightRequired === false) {
-      nightText = "불필요(주간으로 가능)";
-    } else if (r.nightRequired === true) {
-      if (r.reqMultDayBase !== null && r.reqMultDayBase > 1.6) {
-        nightText = `주야간만으로도 부족(추가 인원 필요)`;
-      } else {
-        nightText = `필요(야간 비중 약 ${fmtNum(r.nightSharePct, 0)}%)`;
-      }
-    }
-  }
-
-  return `
-    <tr><td>작업가능비율</td><td class="right"><b>${esc(ratioText)}</b></td></tr>
-    <tr><td>필요 작업일수</td><td class="right"><b>${r.workDaysNeeded !== null ? fmtNum(r.workDaysNeeded, 1) + " 일" : "—"}</b></td></tr>
-    <tr><td>예상 공사기간(달력일)</td><td class="right"><b>${r.calendarDaysNeeded !== null ? fmtNum(r.calendarDaysNeeded, 0) + " 일" : "—"}</b></td></tr>
-    <tr><td>목표 달력일 기준 필요 인원</td><td class="right"><b>${r.crewNeeded !== null ? fmtNum(Math.ceil(r.crewNeeded), 0) + " 명" : "—"}</b></td></tr>
-    <tr><td><b>야간작업 필요 여부</b></td><td class="right"><b>${esc(nightText)}</b></td></tr>
+  const resultBlock = `
+    <div style="margin-top:14px;">
+      <div style="font-weight:900; margin-bottom:8px;">결과</div>
+      <table class="table">
+        <thead>
+          <tr><th>항목</th><th class="right">값</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>작업가능비율</td><td class="right"><b>${esc(ratioText)}</b></td></tr>
+          <tr><td>필요 작업일수</td><td class="right"><b>${workDaysNeeded !== null ? fmtNum(workDaysNeeded, 1) + " 일" : "—"}</b></td></tr>
+          <tr><td>예상 공사기간(달력일)</td><td class="right"><b>${calendarDaysNeeded !== null ? fmtNum(calendarDaysNeeded, 0) + " 일" : "—"}</b></td></tr>
+          ${
+            targetCal !== null && targetCal > 0
+              ? `<tr><td>목표 공사기간</td><td class="right"><b>${fmtNum(targetCal, 0)} 일</b></td></tr>`
+              : ""
+          }
+          ${altHtml}
+        </tbody>
+      </table>
+    </div>
   `;
-}
-
-function renderDurationCalcView(d) {
-  // ✅ preset이 선택되면 targetCalendarDays도 자동 입력
-  if (durationCalcState.targetPreset) {
-    durationCalcState.targetCalendarDays = String(durationCalcState.targetPreset);
-  }
-
-  const resultRows = buildDurationResultRows(d);
-
-  const presetOptions = [
-    { label: "선택 없음", value: "" },
-    { label: "90일 (약 3개월)", value: "90" },
-    { label: "120일 (약 4개월)", value: "120" },
-    { label: "180일 (약 6개월)", value: "180" },
-    { label: "240일 (약 8개월)", value: "240" },
-    { label: "365일 (1년)", value: "365" },
-  ];
 
   return `
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
       <div style="font-weight:900;">기준 연도</div>
-      <input type="number" data-duration-field="year" value="${esc(durationCalcState.year)}"
+      <input type="number" data-duration-field="year" value="${esc(year)}"
         style="width:120px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;" />
 
       <div style="font-weight:900;">총 작업량</div>
@@ -1233,8 +1227,8 @@ function renderDurationCalcView(d) {
         <div style="display:flex; gap:10px; align-items:center; margin-top:8px; flex-wrap:wrap;">
           <select data-duration-field="shiftMode"
             style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
-            <option value="day" ${durationCalcState.shiftMode === "day" ? "selected" : ""}>주간</option>
-            <option value="daynight" ${durationCalcState.shiftMode === "daynight" ? "selected" : ""}>주야간</option>
+            <option value="day" ${shiftMode === "day" ? "selected" : ""}>주간</option>
+            <option value="daynight" ${shiftMode === "daynight" ? "selected" : ""}>주야간</option>
           </select>
 
           <div style="display:flex; align-items:center; gap:8px;">
@@ -1254,57 +1248,19 @@ function renderDurationCalcView(d) {
 
     <div style="margin-top:12px; border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
       <div style="font-weight:900;">목표 공사기간(선택)</div>
-
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
-        <select data-duration-field="targetPreset"
-          style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
-          ${presetOptions
-            .map(
-              (o) => `<option value="${o.value}" ${String(durationCalcState.targetPreset) === String(o.value) ? "selected" : ""}>${esc(o.label)}</option>`
-            )
-            .join("")}
-        </select>
-
         <input type="number" min="1" data-duration-field="targetCalendarDays" value="${esc(durationCalcState.targetCalendarDays)}"
-          placeholder="직접 입력(달력일)"
+          placeholder="달력일(예: 180)"
           style="width:180px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
         <span class="muted">일</span>
-
-        <span class="muted">※ 입력 중에도 값이 끊기지 않도록 결과만 즉시 업데이트됩니다.</span>
+      </div>
+      <div class="muted" style="margin-top:6px;">
+        ※ 목표기간 입력 시 “주간 유지 / 주야간 전환” 대안을 자동 제시합니다.
       </div>
     </div>
 
-    <div style="margin-top:14px;">
-      <div style="font-weight:900; margin-bottom:8px;">결과</div>
-      <table class="table">
-        <thead>
-          <tr><th>항목</th><th class="right">값</th></tr>
-        </thead>
-        <tbody id="durationResultBody">
-          ${resultRows}
-        </tbody>
-      </table>
-    </div>
+    ${resultBlock}
   `;
-}
-
-// ✅ 입력 중에는 전체 rerender 하지 않고 "결과 테이블만" 업데이트
-function updateDurationResultOnly() {
-  if (view !== "duration") return;
-  const d = countryData?.[selectedISO];
-  if (!d) return;
-  const el = document.getElementById("durationResultBody");
-  if (!el) return;
-  el.innerHTML = buildDurationResultRows(d);
-}
-
-function updateLaborResultOnly() {
-  if (view !== "laborcalc") return;
-  const d = countryData?.[selectedISO];
-  if (!d) return;
-  const el = document.getElementById("laborResultBody");
-  if (!el) return;
-  el.innerHTML = buildLaborResultRows(d);
 }
 
 // ============== panel ==============
@@ -1340,6 +1296,45 @@ function renderPanel(isoRaw, fallbackName) {
 
   setInfo(title, tabs + body);
   updateMatTotal();
+}
+
+// ============== ✅ 입력 렌더링 디바운스 + 포커스/커서 복원(타이핑 끊김 해결) ==============
+let __rerenderTimer = null;
+function scheduleRerender() {
+  clearTimeout(__rerenderTimer);
+
+  const active = document.activeElement;
+  const key =
+    active?.getAttribute?.("data-duration-field") ||
+    active?.getAttribute?.("data-labor-field") ||
+    null;
+
+  const selStart = active?.selectionStart;
+  const selEnd = active?.selectionEnd;
+
+  __rerenderTimer = setTimeout(() => {
+    renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
+
+    if (key) {
+      // duration 우선 → labor도 같이
+      const el =
+        document.querySelector(`[data-duration-field="${key}"]`) ||
+        document.querySelector(`[data-labor-field="${key}"]`);
+
+      if (el && typeof el.focus === "function") {
+        el.focus();
+        if (
+          typeof selStart === "number" &&
+          typeof selEnd === "number" &&
+          typeof el.setSelectionRange === "function"
+        ) {
+          try {
+            el.setSelectionRange(selStart, selEnd);
+          } catch {}
+        }
+      }
+    }
+  }, 500); // ✅ 180ms → 500ms (입력 끊김 방지)
 }
 
 // ============== init ==============
@@ -1489,7 +1484,7 @@ async function init() {
 
   if (advancedBtn) advancedBtn.addEventListener("click", () => alert(" "));
 
-  // ✅ info 영역 이벤트
+  // ✅ info 영역 이벤트: 탭/CSV/버튼 클릭
   const infoEl = document.getElementById("info");
   if (infoEl) {
     infoEl.addEventListener("click", (e) => {
@@ -1507,7 +1502,7 @@ async function init() {
       }
     });
 
-    // ✅ change 이벤트(셀렉트/체크박스는 rerender OK)
+    // ✅ change 이벤트
     infoEl.addEventListener("change", (e) => {
       const t = e.target;
 
@@ -1518,19 +1513,10 @@ async function init() {
         return;
       }
 
-      // duration fields (select/checkbox)
+      // duration fields (select)
       const df = t?.getAttribute?.("data-duration-field");
       if (df) {
         durationCalcState[df] = t.type === "checkbox" ? t.checked : t.value;
-
-        // preset 선택하면 targetCalendarDays 자동 반영 + 즉시 결과 업데이트
-        if (df === "targetPreset") {
-          durationCalcState.targetCalendarDays = durationCalcState.targetPreset || "";
-          renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
-          return;
-        }
-
-        // shiftMode, OT 같은 건 화면 다시 그려도 입력 끊김 없음
         renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
         return;
       }
@@ -1539,18 +1525,11 @@ async function init() {
       const lf = t?.getAttribute?.("data-labor-field");
       if (lf) {
         laborCalcState[lf] = t.type === "checkbox" ? t.checked : t.value;
-
-        // 로봇 사용 체크는 입력창 구조가 바뀌므로 rerender
-        if (lf === "robotUse") {
-          renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
-          return;
-        }
-
         renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
         return;
       }
 
-      // costs에서 인건비 연도 변경
+      // costs에서 인건비 연도 변경 UI(data-labor-year)
       if (t && t.matches('select[data-labor-year]')) {
         durationCalcState.year = t.value;
         renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
@@ -1558,7 +1537,7 @@ async function init() {
       }
     });
 
-    // ✅ input 이벤트(입력 중에는 rerender 금지 → 결과만 업데이트)
+    // ✅ input 이벤트
     infoEl.addEventListener("input", (e) => {
       const t = e.target;
 
@@ -1570,19 +1549,19 @@ async function init() {
         return;
       }
 
-      // duration inputs: ✅ 값 저장 + 결과만 업데이트
+      // duration fields (input) ✅ 디바운스 렌더링
       const df = t?.getAttribute?.("data-duration-field");
       if (df) {
         durationCalcState[df] = t.value;
-        updateDurationResultOnly();
+        scheduleRerender();
         return;
       }
 
-      // laborcalc inputs: ✅ 값 저장 + 결과만 업데이트
+      // laborcalc fields (input) ✅ 디바운스 렌더링
       const lf = t?.getAttribute?.("data-labor-field");
       if (lf) {
         laborCalcState[lf] = t.value;
-        updateLaborResultOnly();
+        scheduleRerender();
         return;
       }
     });
