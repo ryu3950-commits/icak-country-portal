@@ -416,11 +416,7 @@ function getRobotReplaceManDaysPerRobotDayDefault() {
 
 // 로봇 일단가 기본값: countrydata에 있으면 사용, 없으면 300 (표 기반 환산에 부합)
 function getRobotDailyUsdDefault(d) {
-  const fromData =
-    toNum(d?.robotCleaning?.robotDailyUsd) ??
-    toNum(d?.robotDailyUSD) ??
-    null;
-
+  const fromData = toNum(d?.robotCleaning?.robotDailyUsd) ?? toNum(d?.robotDailyUSD) ?? null;
   return fromData !== null ? fromData : 300;
 }
 
@@ -745,9 +741,8 @@ function computeLaborCalc(d) {
   // - replaceManDaysPerRobotDay: null 또는 0 이하 → 기본값(10)
   // - robots: null 또는 0 이하 → 1
   const robotDailyCandidate = toNum(laborCalcState.robotDailyUsd);
-  const robotDailyDefault = robotDailyCandidate !== null && robotDailyCandidate > 0
-    ? robotDailyCandidate
-    : getRobotDailyUsdDefault(d);
+  const robotDailyDefault =
+    robotDailyCandidate !== null && robotDailyCandidate > 0 ? robotDailyCandidate : getRobotDailyUsdDefault(d);
 
   if (!laborCalcState.robotUse) {
     return {
@@ -768,8 +763,7 @@ function computeLaborCalc(d) {
   const robots = Math.max(1, Math.floor(robotsCandidate !== null && robotsCandidate > 0 ? robotsCandidate : 1));
 
   const mdCandidate = toNum(laborCalcState.replaceManDaysPerRobotDay);
-  const mdPerRobotDay =
-    mdCandidate !== null && mdCandidate > 0 ? mdCandidate : getRobotReplaceManDaysPerRobotDayDefault();
+  const mdPerRobotDay = mdCandidate !== null && mdCandidate > 0 ? mdCandidate : getRobotReplaceManDaysPerRobotDayDefault();
 
   const robotTotalDays = replaceManDays !== null ? replaceManDays / mdPerRobotDay : null;
   const robotFleetCalendarDays = robotTotalDays !== null ? robotTotalDays / robots : null;
@@ -781,14 +775,11 @@ function computeLaborCalc(d) {
 
   const robotCost = robotTotalDays !== null ? robotTotalDays * robotDailyDefault : null;
 
-  const totalCostWithRobot =
-    laborCostWithRobot !== null && robotCost !== null ? laborCostWithRobot + robotCost : null;
+  const totalCostWithRobot = laborCostWithRobot !== null && robotCost !== null ? laborCostWithRobot + robotCost : null;
 
-  const saving =
-    laborCostNoRobot !== null && totalCostWithRobot !== null ? laborCostNoRobot - totalCostWithRobot : null;
+  const saving = laborCostNoRobot !== null && totalCostWithRobot !== null ? laborCostNoRobot - totalCostWithRobot : null;
 
-  const savingRate =
-    saving !== null && laborCostNoRobot !== null && laborCostNoRobot > 0 ? saving / laborCostNoRobot : null;
+  const savingRate = saving !== null && laborCostNoRobot !== null && laborCostNoRobot > 0 ? saving / laborCostNoRobot : null;
 
   return {
     year: y,
@@ -816,6 +807,33 @@ function computeLaborCalc(d) {
 }
 
 function renderLaborCalcView(d) {
+  // ✅✅✅ [FIX] 로봇 입력값이 "0"으로 고착되는 문제 해결 (다른 부분 손대지 않음)
+  // - state에 0이 들어가면 input value가 0으로 계속 렌더링됨
+  // - 여기서 state를 "빈값/기본값"으로 정리해서 UI가 0에 고착되는 걸 방지
+  const fixZeroToDefault = () => {
+    const rd = toNum(laborCalcState.robotDailyUsd);
+    if (rd === null || rd <= 0) {
+      laborCalcState.robotDailyUsd = ""; // 빈칸 + placeholder(기본값) 표시
+    }
+
+    const md = toNum(laborCalcState.replaceManDaysPerRobotDay);
+    if (md === null || md <= 0) {
+      laborCalcState.replaceManDaysPerRobotDay = String(getRobotReplaceManDaysPerRobotDayDefault()); // 기본 10
+    }
+
+    const rb = toNum(laborCalcState.robots);
+    if (rb === null || rb <= 0) {
+      laborCalcState.robots = "1";
+    }
+
+    const rr = toNum(laborCalcState.replaceRate);
+    if (rr === null) laborCalcState.replaceRate = "50";
+    else laborCalcState.replaceRate = String(Math.min(100, Math.max(0, rr)));
+  };
+
+  fixZeroToDefault();
+  // ---------------- 기존 코드 그대로 ----------------
+
   const years = listLaborYears(d);
   const defaultYear = getLatestLaborYear(d) ?? new Date().getFullYear();
   if (!years.length) laborCalcState.year = laborCalcState.year || defaultYear;
@@ -824,10 +842,10 @@ function renderLaborCalcView(d) {
   const unit = esc(d?.laborAnnual?.unit || "USD/day");
   const res = computeLaborCalc(d);
 
-  const appliedWageText =
-    res.effectiveWage !== null ? `${fmtNum(res.effectiveWage, 2)} ${unit}` : "—";
+  const appliedWageText = res.effectiveWage !== null ? `${fmtNum(res.effectiveWage, 2)} ${unit}` : "—";
 
-  const premText = res.baseWage !== null ? `적용 일급: ${fmtNum(res.baseWage, 2)} × ${fmtNum(res.prem, 3)}` : `적용 일급: —`;
+  const premText =
+    res.baseWage !== null ? `적용 일급: ${fmtNum(res.baseWage, 2)} × ${fmtNum(res.prem, 3)}` : `적용 일급: —`;
 
   const robotBlock = (() => {
     const rc = res.robot;
@@ -960,7 +978,7 @@ function renderLaborCalcView(d) {
           <input type="checkbox" data-labor-field="robotUse" ${laborCalcState.robotUse ? "checked" : ""}/>
           로봇 사용
         </label>
-        <span class="muted">체크 시 로봇 투입 계산</span>
+        <span class="muted">체크 시 세척로봇 투입 계산</span>
       </div>
       ${laborCalcState.robotUse ? robotBlock : ""}
     </div>
@@ -976,6 +994,8 @@ function renderLaborCalcView(d) {
     </div>
   `;
 }
+
+
 
 function renderNonWorkView(d) {
   const nwd = Array.isArray(d.nonWorkDays) ? d.nonWorkDays : [];
@@ -1562,3 +1582,4 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
