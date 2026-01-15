@@ -3,7 +3,6 @@
     "name": "United Arab Emirates",
     "updated": "2026-01-15",
     "nonWorkSchema": "UAE",
-
     "materialsQuarterly": {
       "units": {
         "brent": "USD/bbl",
@@ -52,7 +51,7 @@
         },
         {
           "period": "2025Q1",
-          "brent": 75.0,
+          "brent": 75,
           "lng": 11.2,
           "copper": 9800,
           "aluminium": 2500,
@@ -86,8 +85,6 @@
           "rebar": 650,
           "cement": 81
         },
-
-        /* ✅ 최신값(현실 시세 반영) */
         {
           "period": "2026Q1",
           "brent": 65.3,
@@ -99,7 +96,6 @@
         }
       ]
     },
-
     "materials": [
       { "key": "brent", "item": "원유(Brent)", "unit": "USD/bbl" },
       { "key": "lng", "item": "LNG(JKM)", "unit": "USD/MMBtu" },
@@ -108,7 +104,6 @@
       { "key": "rebar", "item": "철근", "unit": "USD/t" },
       { "key": "cement", "item": "시멘트", "unit": "USD/t" }
     ],
-
     "laborAnnual": {
       "unit": "USD/day",
       "series": [
@@ -118,24 +113,19 @@
         { "year": 2023, "unskilled": 53, "skilled": 105 },
         { "year": 2024, "unskilled": 55, "skilled": 110 },
         { "year": 2025, "unskilled": 58, "skilled": 115 },
-
-        /* ✅ 2026 추가 */
         { "year": 2026, "unskilled": 60, "skilled": 120 }
       ]
     },
-
     "labor": [
       { "role": "비숙련", "wage": 55, "unit": "USD/day" },
       { "role": "숙련", "wage": 110, "unit": "USD/day" }
     ],
-
     "robotCleaning": {
       "annualCostUsdPerM2": { "robot": 59.76, "labor": 21.07 },
       "robotDailyUsd": 300,
       "robotDailyUnit": "USD/robot-day",
       "note": "Robot cleaning cost based on case-study assumptions."
     },
-
     "nonWorkDays": [
       { "month": "1월", "avgTemp": 19, "avgHighLow": "24/14", "sandstorm": 2, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 9, "note": "기온 양호" },
       { "month": "2월", "avgTemp": 20, "avgHighLow": "26/15", "sandstorm": 2, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 8, "note": "건기" },
@@ -151,12 +141,10 @@
       { "month": "12월", "avgTemp": 21, "avgHighLow": "26/16", "sandstorm": 2, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 9, "note": "기온 양호" }
     ]
   },
-
   "VNM": {
     "name": "Vietnam",
     "updated": "2026-01-15",
     "nonWorkSchema": "VNM",
-
     "materialsQuarterly": {
       "units": {
         "brent": "USD/bbl",
@@ -205,7 +193,7 @@
         },
         {
           "period": "2025Q1",
-          "brent": 75.0,
+          "brent": 75,
           "lng": 11.2,
           "copper": 9800,
           "aluminium": 2500,
@@ -239,8 +227,6 @@
           "rebar": 595,
           "cement": 65
         },
-
-        /* ✅ 최신값(현실 시세 반영) */
         {
           "period": "2026Q1",
           "brent": 65.3,
@@ -252,7 +238,6 @@
         }
       ]
     },
-
     "materials": [
       { "key": "brent", "item": "원유(Brent)", "unit": "USD/bbl" },
       { "key": "lng", "item": "LNG(JKM)", "unit": "USD/MMBtu" },
@@ -261,7 +246,6 @@
       { "key": "rebar", "item": "철근", "unit": "USD/t" },
       { "key": "cement", "item": "시멘트", "unit": "USD/t" }
     ],
-
     "laborAnnual": {
       "unit": "USD/day",
       "series": [
@@ -271,24 +255,19 @@
         { "year": 2023, "unskilled": 21, "skilled": 41 },
         { "year": 2024, "unskilled": 22, "skilled": 43 },
         { "year": 2025, "unskilled": 23, "skilled": 45 },
-
-        /* ✅ 2026 추가 */
         { "year": 2026, "unskilled": 24, "skilled": 47 }
       ]
     },
-
     "labor": [
       { "role": "비숙련", "wage": 22, "unit": "USD/day" },
       { "role": "숙련", "wage": 43, "unit": "USD/day" }
     ],
-
     "robotCleaning": {
       "annualCostUsdPerM2": { "robot": 59.76, "labor": 21.07 },
       "robotDailyUsd": 300,
       "robotDailyUnit": "USD/robot-day",
       "note": "Robot cleaning cost based on case-study assumptions."
     },
-
     "nonWorkDays": [
       { "month": "1월", "avgTemp": 22, "avgHighLow": "28/18", "rainDays": 5, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 9, "note": "건기" },
       { "month": "2월", "avgTemp": 23, "avgHighLow": "29/19", "rainDays": 4, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 8, "note": "건기" },
