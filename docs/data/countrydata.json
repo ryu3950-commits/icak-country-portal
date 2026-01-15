@@ -63,12 +63,13 @@
       { "month": "6월", "avgTemp": 35, "avgHighLow": "41/29", "sandstorm": 2, "weekend": 10, "holidayWeekday": 1, "fixedOff": 11, "eqOff8h": 12.5, "note": "여름 미드데이 작업 제한" },
       { "month": "7월", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 11.0, "note": "폭염 미드데이 작업 제한" },
       { "month": "8월", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 1, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 13.0, "note": "폭염 미드데이 작업 제한" },
-      { "month": "9월", "avgTemp": 34, "avgHighLow": "40/28", "sandstorm": 1, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 10.5, "note": "Prophet’s Birthday / 폭염 미드데이 작업 제한 " },
-      { "month": "10월", "avgTemp": 30, "avgHighLow": "36/24", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 8.0, "note": " " },
-      { "month": "11월", "avgTemp": 26, "avgHighLow": "31/20", "sandstorm": 1, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10.0, "note": " " },
+      { "month": "9월", "avgTemp": 34, "avgHighLow": "40/28", "sandstorm": 1, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 10.5, "note": "Prophet’s Birthday / 폭염 미드데이 작업 제한" },
+      { "month": "10월", "avgTemp": 30, "avgHighLow": "36/24", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 8.0, "note": "" },
+      { "month": "11월", "avgTemp": 26, "avgHighLow": "31/20", "sandstorm": 1, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10.0, "note": "" },
       { "month": "12월", "avgTemp": 21, "avgHighLow": "26/16", "sandstorm": 1, "weekend": 8, "holidayWeekday": 3, "fixedOff": 11, "eqOff8h": 11.0, "note": "Commemoration / National Day" }
     ]
   },
+
   "VNM": {
     "name": "Vietnam",
     "updated": "2026-01-15",
@@ -140,4 +141,3 @@
     ]
   }
 }
-
