@@ -740,7 +740,14 @@ function computeLaborCalc(d) {
   const effectiveWage = base !== null ? base * prem : null;
   const laborCostNoRobot = effectiveWage !== null && totalManDays !== null ? effectiveWage * totalManDays : null;
 
-  const robotDailyDefault = toNum(laborCalcState.robotDailyUsd) ?? getRobotDailyUsdDefault(d);
+  // ✅ [핵심 수정] 로봇 단가/대체효과/대수 "0 입력" 방지 보정
+  // - robotDailyUsd: null 또는 0 이하 → 기본값(데이터 or 300)
+  // - replaceManDaysPerRobotDay: null 또는 0 이하 → 기본값(10)
+  // - robots: null 또는 0 이하 → 1
+  const robotDailyCandidate = toNum(laborCalcState.robotDailyUsd);
+  const robotDailyDefault = robotDailyCandidate !== null && robotDailyCandidate > 0
+    ? robotDailyCandidate
+    : getRobotDailyUsdDefault(d);
 
   if (!laborCalcState.robotUse) {
     return {
@@ -757,12 +764,12 @@ function computeLaborCalc(d) {
   const replaceRate = Math.min(100, Math.max(0, toNum(laborCalcState.replaceRate) ?? 0));
   const replaceManDays = totalManDays !== null ? totalManDays * (replaceRate / 100) : null;
 
-  const robots = Math.max(1, toNum(laborCalcState.robots) ?? 1);
+  const robotsCandidate = toNum(laborCalcState.robots);
+  const robots = Math.max(1, Math.floor(robotsCandidate !== null && robotsCandidate > 0 ? robotsCandidate : 1));
 
-  const mdPerRobotDay = Math.max(
-    0.0001,
-    toNum(laborCalcState.replaceManDaysPerRobotDay) ?? getRobotReplaceManDaysPerRobotDayDefault()
-  );
+  const mdCandidate = toNum(laborCalcState.replaceManDaysPerRobotDay);
+  const mdPerRobotDay =
+    mdCandidate !== null && mdCandidate > 0 ? mdCandidate : getRobotReplaceManDaysPerRobotDayDefault();
 
   const robotTotalDays = replaceManDays !== null ? replaceManDays / mdPerRobotDay : null;
   const robotFleetCalendarDays = robotTotalDays !== null ? robotTotalDays / robots : null;
@@ -833,7 +840,7 @@ function renderLaborCalcView(d) {
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
           <label style="display:flex; align-items:center; gap:8px;">
             <span class="muted">로봇 1대·일</span>
-            <input type="number" min="0" step="0.1" data-labor-field="robotDailyUsd" value="${esc(laborCalcState.robotDailyUsd)}"
+            <input type="number" min="1" step="0.1" data-labor-field="robotDailyUsd" value="${esc(laborCalcState.robotDailyUsd)}"
               placeholder="${fmtNum(getRobotDailyUsdDefault(d), 0)}"
               style="width:140px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
             <span class="muted">USD/day</span>
@@ -861,7 +868,7 @@ function renderLaborCalcView(d) {
         </div>
 
         <div class="muted" style="margin-top:8px;">
-          ※ 기준: 로봇 150~200장/h vs 인력 15~20장/h → 로봇 1대 ≈ 인력 10명 수준(대략)
+          ※ 기준: 로봇 150~200장/h vs 인력 15~20장/h → 로봇 1대 ≈ 인력 10명 수준
         </div>
       </div>
     `;
@@ -1085,7 +1092,7 @@ function getShiftMultiplier(mode) {
   return 1.0;
 }
 
-// ✅ (수정) duration 결과에 "증원/주야간 전환" 대안 표시 + 입력 끊김 방지 대응
+// ✅ duration 결과에 "증원/주야간 전환" 대안 표시 + 입력 끊김 방지 대응
 function renderDurationCalcView(d) {
   const year = Number(durationCalcState.year) || new Date().getFullYear();
   const manDays = toNum(durationCalcState.manDays);
@@ -1236,15 +1243,12 @@ function renderDurationCalcView(d) {
     </div>
 
     <div style="margin-top:12px; border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
-      <div style="font-weight:900;">목표 공사기간(선택)</div>
+      <div style="font-weight:900;">목표 공사기간</div>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
         <input type="number" min="1" data-duration-field="targetCalendarDays" value="${esc(durationCalcState.targetCalendarDays)}"
           placeholder="달력일(예: 180)"
           style="width:180px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
         <span class="muted">일</span>
-      </div>
-      <div class="muted" style="margin-top:6px;">
-        ※ 목표기간 입력 시 “주간 유지 / 주야간 전환” 대안을 자동 제시합니다.
       </div>
     </div>
 
@@ -1323,7 +1327,7 @@ function scheduleRerender() {
         }
       }
     }
-  }, 500); // ✅ 180ms → 500ms (입력 끊김 방지)
+  }, 500);
 }
 
 // ============== init ==============
