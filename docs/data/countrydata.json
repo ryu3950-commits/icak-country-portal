@@ -56,17 +56,17 @@
     },
     "nonWorkDays": [
       { "month": "1월", "avgTemp": 19, "avgHighLow": "24/14", "sandstorm": 1, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 9.0, "note": "신정 포함" },
-      { "month": "2월", "avgTemp": 20, "avgHighLow": "26/15", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 10.0, "note": "라마단 영향(근무시간 단축 등가 반영)" },
-      { "month": "3월", "avgTemp": 23, "avgHighLow": "29/18", "sandstorm": 2, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 12.0, "note": "라마단 영향 + 샤말 시즌 시작" },
-      { "month": "4월", "avgTemp": 28, "avgHighLow": "34/22", "sandstorm": 2, "weekend": 8, "holidayWeekday": 2, "fixedOff": 10, "eqOff8h": 10.0, "note": "Eid al-Fitr(월배분 반영)" },
-      { "month": "5월", "avgTemp": 33, "avgHighLow": "39/27", "sandstorm": 3, "weekend": 8, "holidayWeekday": 3, "fixedOff": 11, "eqOff8h": 11.0, "note": "Arafah+Eid al-Adha(월배분 반영)" },
-      { "month": "6월", "avgTemp": 35, "avgHighLow": "41/29", "sandstorm": 2, "weekend": 10, "holidayWeekday": 1, "fixedOff": 11, "eqOff8h": 12.5, "note": "여름 미드데이 작업 제한(등가 반영)" },
-      { "month": "7월", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 11.0, "note": "폭염 미드데이 작업 제한(등가 반영)" },
-      { "month": "8월", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 1, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 13.0, "note": "폭염 미드데이 작업 제한(등가 반영)" },
-      { "month": "9월", "avgTemp": 34, "avgHighLow": "40/28", "sandstorm": 1, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 10.5, "note": "Prophet’s Birthday(월배분) + 미드데이 제한 일부" },
-      { "month": "10월", "avgTemp": 30, "avgHighLow": "36/24", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 8.0, "note": "작업 우수" },
-      { "month": "11월", "avgTemp": 26, "avgHighLow": "31/20", "sandstorm": 1, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10.0, "note": "성수기" },
-      { "month": "12월", "avgTemp": 21, "avgHighLow": "26/16", "sandstorm": 1, "weekend": 8, "holidayWeekday": 3, "fixedOff": 11, "eqOff8h": 11.0, "note": "Commemoration/National Day(월배분 반영)" }
+      { "month": "2월", "avgTemp": 20, "avgHighLow": "26/15", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 10.0, "note": "라마단 영향" },
+      { "month": "3월", "avgTemp": 23, "avgHighLow": "29/18", "sandstorm": 2, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 12.0, "note": "라마단 영향 / 샤말 시즌 시작" },
+      { "month": "4월", "avgTemp": 28, "avgHighLow": "34/22", "sandstorm": 2, "weekend": 8, "holidayWeekday": 2, "fixedOff": 10, "eqOff8h": 10.0, "note": "Eid al-Fitr" },
+      { "month": "5월", "avgTemp": 33, "avgHighLow": "39/27", "sandstorm": 3, "weekend": 8, "holidayWeekday": 3, "fixedOff": 11, "eqOff8h": 11.0, "note": "Arafah / Eid al-Adha" },
+      { "month": "6월", "avgTemp": 35, "avgHighLow": "41/29", "sandstorm": 2, "weekend": 10, "holidayWeekday": 1, "fixedOff": 11, "eqOff8h": 12.5, "note": "여름 미드데이 작업 제한" },
+      { "month": "7월", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 11.0, "note": "폭염 미드데이 작업 제한" },
+      { "month": "8월", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 1, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 13.0, "note": "폭염 미드데이 작업 제한" },
+      { "month": "9월", "avgTemp": 34, "avgHighLow": "40/28", "sandstorm": 1, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 10.5, "note": "Prophet’s Birthday / 폭염 미드데이 작업 제한 " },
+      { "month": "10월", "avgTemp": 30, "avgHighLow": "36/24", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 8.0, "note": " " },
+      { "month": "11월", "avgTemp": 26, "avgHighLow": "31/20", "sandstorm": 1, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10.0, "note": " " },
+      { "month": "12월", "avgTemp": 21, "avgHighLow": "26/16", "sandstorm": 1, "weekend": 8, "holidayWeekday": 3, "fixedOff": 11, "eqOff8h": 11.0, "note": "Commemoration / National Day" }
     ]
   },
   "VNM": {
@@ -140,3 +140,4 @@
     ]
   }
 }
+
