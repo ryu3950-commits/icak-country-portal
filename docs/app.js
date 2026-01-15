@@ -681,7 +681,7 @@ function renderMatCalcView(d) {
             />
             <span class="muted" style="margin-left:6px;">${esc(it.qtyLabel)}</span>
           </td>
-          <td class="right"><b>${cost !== null ? fmtNum(cost, 2) : "—"}</b></td>
+          <td class="right"><b id="matCost_${esc(it.key)}">${cost !== null ? fmtNum(cost, 2) : "—"}</b></td>
         </tr>
       `;
     })
@@ -728,6 +728,22 @@ function updateMatTotal() {
   const el = document.getElementById("matTotal");
   if (!el) return;
   el.textContent = hasAny ? `합계: ${fmtNum(sum, 2)} USD` : `합계: —`;
+}
+
+// ✅ 자재비 계산: 입력 즉시 "각 자재별 금액"만 업데이트(전체 렌더 없이)
+function updateMatRowCost(key) {
+  if (view !== "matcalc") return;
+  const d = countryData?.[selectedISO];
+  if (!d) return;
+
+  const period = matCalcState.period || getLatestPeriod(d) || "";
+  const qtyNum = toNum(matCalcState.qty?.[key]);
+  const up = getMaterialUnitPrice(d, key, period);
+  const cost = qtyNum !== null && up.usd !== null ? qtyNum * up.usd : null;
+
+  const el = document.getElementById(`matCost_${key}`);
+  if (!el) return;
+  el.textContent = cost !== null ? fmtNum(cost, 2) : "—";
 }
 
 // ============== laborcalc (계산) ==============
@@ -1645,7 +1661,9 @@ async function init() {
 
       // costs에서 인건비 연도 변경 UI(data-labor-year)
       if (t && t.matches('select[data-labor-year]')) {
+        // ✅ costs(표시) / laborcalc(계산) 연도 동기화
         durationCalcState.year = t.value;
+        laborCalcState.year = t.value;
         renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
         return;
       }
@@ -1655,10 +1673,11 @@ async function init() {
     infoEl.addEventListener("input", (e) => {
       const t = e.target;
 
-      // mat qty는 즉시 합계만 업데이트
+      // ✅ mat qty는 즉시 "행 금액" + "합계" 업데이트 (전체 렌더 없이)
       const k = t?.getAttribute?.("data-matqty");
       if (k) {
         matCalcState.qty[k] = t.value;
+        updateMatRowCost(k);
         updateMatTotal();
         return;
       }
