@@ -415,15 +415,15 @@ function getRobotReplaceManDaysPerRobotDayDefault() {
   return 10;
 }
 
-// 로봇 일단가 기본값: countrydata에 있으면 사용, 없으면 300 (표 기반 환산에 부합)
+// ✅ 로봇 일단가 기본값: countrydata에 있으면 사용, 없으면 300
+// ✅ (수정) 0 또는 음수면 무조건 300 fallback
 function getRobotDailyUsdDefault(d) {
-  // 사용자가 input으로 넣은 값이 있으면 그것이 최우선(계산 함수에서 처리)
   const fromData =
     toNum(d?.robotCleaning?.robotDailyUsd) ??
     toNum(d?.robotDailyUSD) ??
     null;
 
-  return fromData !== null ? fromData : 300;
+  return fromData !== null && fromData > 0 ? fromData : 300;
 }
 
 // ============== CSV export ==============
@@ -747,9 +747,12 @@ function computeLaborCalc(d) {
     effectiveWage !== null && totalManDays !== null ? effectiveWage * totalManDays : null;
 
   // ✅ 로봇 1대·일 단가 (기본 300 USD/day)
+  // ✅ (수정) 입력이 0/빈값이면 무시하고 기본값 사용
+  const robotDailyOverride = toNum(laborCalcState.robotDailyUsd);
   const robotDailyDefault =
-    toNum(laborCalcState.robotDailyUsd) ??
-    getRobotDailyUsdDefault(d);
+    robotDailyOverride !== null && robotDailyOverride > 0
+      ? robotDailyOverride
+      : getRobotDailyUsdDefault(d);
 
   if (!laborCalcState.robotUse) {
     return {
@@ -1234,59 +1237,12 @@ function renderPanel(isoRaw, fallbackName) {
 }
 
 // ============== ✅ 입력 렌더링 디바운스(4000 한번에 입력되게) ==============
-// ✅ PATCH: 입력 중 커서 튕김 방지(포커스/커서 복원 + 디바운스 증가)
 let __rerenderTimer = null;
 function scheduleRerender() {
   clearTimeout(__rerenderTimer);
-
-  // 1) 현재 포커스/커서 위치 저장
-  const active = document.activeElement;
-  let focusMeta = null;
-
-  if (active && active.tagName === "INPUT") {
-    const lf = active.getAttribute("data-labor-field");
-    const df = active.getAttribute("data-duration-field");
-    const mq = active.getAttribute("data-matqty");
-
-    const key = lf
-      ? { type: "labor", key: lf }
-      : df
-      ? { type: "duration", key: df }
-      : mq
-      ? { type: "matqty", key: mq }
-      : null;
-
-    if (key) {
-      focusMeta = {
-        ...key,
-        start: active.selectionStart,
-        end: active.selectionEnd,
-      };
-    }
-  }
-
-  // 2) 디바운스 시간 증가 (입력 끊김 방지)
   __rerenderTimer = setTimeout(() => {
     renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
-
-    // 3) 리렌더 후 포커스/커서 복원
-    if (focusMeta) {
-      let selector = "";
-      if (focusMeta.type === "labor") selector = `input[data-labor-field="${focusMeta.key}"]`;
-      if (focusMeta.type === "duration") selector = `input[data-duration-field="${focusMeta.key}"]`;
-      if (focusMeta.type === "matqty") selector = `input[data-matqty="${focusMeta.key}"]`;
-
-      const el = document.querySelector(selector);
-      if (el) {
-        el.focus({ preventScroll: true });
-        if (focusMeta.start !== null && focusMeta.start !== undefined) {
-          try {
-            el.setSelectionRange(focusMeta.start, focusMeta.end ?? focusMeta.start);
-          } catch {}
-        }
-      }
-    }
-  }, 550); // ✅ 기존 180ms → 550ms
+  }, 180);
 }
 
 // ============== init ==============
