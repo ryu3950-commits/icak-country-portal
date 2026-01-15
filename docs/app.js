@@ -3,8 +3,6 @@
 // ✅ 인건비: countrydata의 laborAnnual(연도별) 있으면 연도 선택 가능 + 없으면 labor(기존) fallback
 // ✅ 인건비 계산(laborcalc): 총 인일 + 프리미엄 + 로봇 투입(대체율/로봇단가/대체 인일) → 절감효과 계산
 // ✅ 공사기간 계산(duration): 비작업일수 기반 작업가능비율 추정 → 작업일수/달력일수/필요인원 계산
-// ✅ 공사기간 결과: 목표기간이 빡빡할 경우 "인원 증원" / "주야간 전환" 대안 자동 제시
-// ✅ 입력 끊김 해결: 디바운스 + 포커스/커서 복원
 //
 // [countrydata.json 권장 구조]
 // - laborAnnual: { unit:"USD/day", series:[{year, unskilled, skilled}, ...] }
@@ -80,7 +78,7 @@ let durationCalcState = {
   crew: "40", // 투입 인원(명)
   shiftMode: "day", // day | daynight
   overtimePremium: "1.0", // 1.0 | 1.25 | 1.5
-  targetCalendarDays: "", // 목표 공사기간(달력일) - 선택
+  targetCalendarDays: "", // 목표 공사기간(달력일)
 };
 
 // 인건비 계산 상태(로봇 포함)
@@ -369,7 +367,6 @@ function getMaterialUnitPrice(d, key, period) {
 }
 
 // ============== labor utilities (연도별 지원) ==============
-
 function listLaborYears(d) {
   const s = d?.laborAnnual?.series;
   if (!Array.isArray(s) || !s.length) return [];
@@ -419,8 +416,11 @@ function getRobotReplaceManDaysPerRobotDayDefault() {
 
 // 로봇 일단가 기본값: countrydata에 있으면 사용, 없으면 300 (표 기반 환산에 부합)
 function getRobotDailyUsdDefault(d) {
-  // 사용자가 input으로 넣은 값이 있으면 그것이 최우선(계산 함수에서 처리)
-  const fromData = toNum(d?.robotCleaning?.robotDailyUsd) ?? toNum(d?.robotDailyUSD) ?? null;
+  const fromData =
+    toNum(d?.robotCleaning?.robotDailyUsd) ??
+    toNum(d?.robotDailyUSD) ??
+    null;
+
   return fromData !== null ? fromData : 300;
 }
 
@@ -459,7 +459,6 @@ function exportMaterialsAndNonworkCSV() {
   const d = countryData?.[selectedISO];
   if (!d) return alert(`데이터 없음: ${selectedISO}`);
 
-  // 공사원가(선택분기)
   const period = matCalcState.period || getLatestPeriod(d) || "";
   const items = Array.isArray(d.materials) ? d.materials : [];
   const headers = ["분기", "품목", "가격", "단위"];
@@ -473,7 +472,6 @@ function exportMaterialsAndNonworkCSV() {
 
   downloadCSV(`${selectedISO}_공사원가_${period || "period"}.csv`, rowsToCSV(headers, rows));
 
-  // 비작업일수
   const arr = Array.isArray(d.nonWorkDays) ? d.nonWorkDays : [];
   if (!arr.length) return;
 
@@ -563,7 +561,6 @@ function renderLaborBlock(d, opts = {}) {
   const years = listLaborYears(d);
   const defaultYear = getLatestLaborYear(d) ?? new Date().getFullYear();
 
-  // simple 모드에서는 durationCalcState.year를 따라감
   const y = mode === "calc" ? Number(laborCalcState.year) || defaultYear : Number(durationCalcState.year) || defaultYear;
 
   const unsk = getLaborWageByYear(d, "unskilled", y);
@@ -598,7 +595,7 @@ function renderLaborBlock(d, opts = {}) {
       </tbody>
     </table>
     <div class="muted" style="margin-top:8px;">
-      ※ 기준: 로봇 150~200장/h vs 인력 15~20장/h → 로봇 1대 ≈ 인력 10명 수준(대략)
+      ※ 기준: 로봇 150~200장/h vs 인력 15~20장/h → 로봇 1대 ≈ 인력 10명 수준
     </div>
   `;
 }
@@ -716,10 +713,10 @@ function updateMatTotal() {
 
 // ============== laborcalc (계산) ==============
 const LABOR_PREM = {
-  high: 1.15,       // 고소작업
-  electrical: 1.10, // 전기설비 근접
-  daynight: 1.25,   // 주야간
-  equip: 1.05,      // 장비 포함
+  high: 1.15,
+  electrical: 1.10,
+  daynight: 1.25,
+  equip: 1.05,
 };
 
 function computeLaborCalc(d) {
@@ -741,15 +738,9 @@ function computeLaborCalc(d) {
     (laborCalcState.premEquip ? LABOR_PREM.equip : 1);
 
   const effectiveWage = base !== null ? base * prem : null;
-  const laborCostNoRobot =
-    effectiveWage !== null && totalManDays !== null ? effectiveWage * totalManDays : null;
+  const laborCostNoRobot = effectiveWage !== null && totalManDays !== null ? effectiveWage * totalManDays : null;
 
-  // ✅ 로봇 1대·일 단가 (기본 300 USD/day) - 0/음수 방어
-  const rawRobotDaily =
-    toNum(laborCalcState.robotDailyUsd) ??
-    getRobotDailyUsdDefault(d);
-
-  const robotDailyDefault = rawRobotDaily !== null && rawRobotDaily > 0 ? rawRobotDaily : getRobotDailyUsdDefault(d);
+  const robotDailyDefault = toNum(laborCalcState.robotDailyUsd) ?? getRobotDailyUsdDefault(d);
 
   if (!laborCalcState.robotUse) {
     return {
@@ -768,7 +759,6 @@ function computeLaborCalc(d) {
 
   const robots = Math.max(1, toNum(laborCalcState.robots) ?? 1);
 
-  // ✅ 기본 10 인일/대·일 (표의 10배 속도 기준)
   const mdPerRobotDay = Math.max(
     0.0001,
     toNum(laborCalcState.replaceManDaysPerRobotDay) ?? getRobotReplaceManDaysPerRobotDayDefault()
@@ -777,13 +767,12 @@ function computeLaborCalc(d) {
   const robotTotalDays = replaceManDays !== null ? replaceManDays / mdPerRobotDay : null;
   const robotFleetCalendarDays = robotTotalDays !== null ? robotTotalDays / robots : null;
 
-  const remainManDays = totalManDays !== null && replaceManDays !== null ? Math.max(0, totalManDays - replaceManDays) : null;
+  const remainManDays =
+    totalManDays !== null && replaceManDays !== null ? Math.max(0, totalManDays - replaceManDays) : null;
 
-  const laborCostWithRobot =
-    effectiveWage !== null && remainManDays !== null ? effectiveWage * remainManDays : null;
+  const laborCostWithRobot = effectiveWage !== null && remainManDays !== null ? effectiveWage * remainManDays : null;
 
-  const robotCost =
-    robotTotalDays !== null ? robotTotalDays * robotDailyDefault : null;
+  const robotCost = robotTotalDays !== null ? robotTotalDays * robotDailyDefault : null;
 
   const totalCostWithRobot =
     laborCostWithRobot !== null && robotCost !== null ? laborCostWithRobot + robotCost : null;
@@ -1569,3 +1558,4 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
