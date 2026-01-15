@@ -13,87 +13,15 @@
         "cement": "USD/t"
       },
       "series": [
-        {
-          "period": "2024Q1",
-          "brent": 82.5,
-          "lng": 13.8,
-          "copper": 8500,
-          "aluminium": 2250,
-          "rebar": 610,
-          "cement": 74
-        },
-        {
-          "period": "2024Q2",
-          "brent": 84.2,
-          "lng": 12.9,
-          "copper": 9000,
-          "aluminium": 2380,
-          "rebar": 620,
-          "cement": 75
-        },
-        {
-          "period": "2024Q3",
-          "brent": 80.1,
-          "lng": 12.2,
-          "copper": 9100,
-          "aluminium": 2400,
-          "rebar": 625,
-          "cement": 76
-        },
-        {
-          "period": "2024Q4",
-          "brent": 77.6,
-          "lng": 11.6,
-          "copper": 9400,
-          "aluminium": 2450,
-          "rebar": 630,
-          "cement": 77
-        },
-        {
-          "period": "2025Q1",
-          "brent": 75,
-          "lng": 11.2,
-          "copper": 9800,
-          "aluminium": 2500,
-          "rebar": 635,
-          "cement": 78
-        },
-        {
-          "period": "2025Q2",
-          "brent": 73.8,
-          "lng": 10.8,
-          "copper": 10200,
-          "aluminium": 2550,
-          "rebar": 640,
-          "cement": 79
-        },
-        {
-          "period": "2025Q3",
-          "brent": 71.9,
-          "lng": 10.6,
-          "copper": 10900,
-          "aluminium": 2620,
-          "rebar": 645,
-          "cement": 80
-        },
-        {
-          "period": "2025Q4",
-          "brent": 68.4,
-          "lng": 11.1,
-          "copper": 12100,
-          "aluminium": 2850,
-          "rebar": 650,
-          "cement": 81
-        },
-        {
-          "period": "2026Q1",
-          "brent": 65.3,
-          "lng": 11.1,
-          "copper": 13150,
-          "aluminium": 3010,
-          "rebar": 655,
-          "cement": 82
-        }
+        { "period": "2024Q1", "brent": 82.5, "lng": 13.8, "copper": 8500, "aluminium": 2250, "rebar": 610, "cement": 74 },
+        { "period": "2024Q2", "brent": 84.2, "lng": 12.9, "copper": 9000, "aluminium": 2380, "rebar": 620, "cement": 75 },
+        { "period": "2024Q3", "brent": 80.1, "lng": 12.2, "copper": 9100, "aluminium": 2400, "rebar": 625, "cement": 76 },
+        { "period": "2024Q4", "brent": 77.6, "lng": 11.6, "copper": 9400, "aluminium": 2450, "rebar": 630, "cement": 77 },
+        { "period": "2025Q1", "brent": 75.0, "lng": 11.2, "copper": 9800, "aluminium": 2500, "rebar": 635, "cement": 78 },
+        { "period": "2025Q2", "brent": 73.8, "lng": 10.8, "copper": 10200, "aluminium": 2550, "rebar": 640, "cement": 79 },
+        { "period": "2025Q3", "brent": 71.9, "lng": 10.6, "copper": 10900, "aluminium": 2620, "rebar": 645, "cement": 80 },
+        { "period": "2025Q4", "brent": 68.4, "lng": 11.1, "copper": 12100, "aluminium": 2850, "rebar": 650, "cement": 81 },
+        { "period": "2026Q1", "brent": 65.3, "lng": 11.1, "copper": 13150, "aluminium": 3010, "rebar": 655, "cement": 82 }
       ]
     },
     "materials": [
@@ -127,18 +55,18 @@
       "note": "Robot cleaning cost based on case-study assumptions."
     },
     "nonWorkDays": [
-      { "month": "1월", "avgTemp": 19, "avgHighLow": "24/14", "sandstorm": 2, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 9, "note": "기온 양호" },
-      { "month": "2월", "avgTemp": 20, "avgHighLow": "26/15", "sandstorm": 2, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 8, "note": "건기" },
-      { "month": "3월", "avgTemp": 23, "avgHighLow": "29/18", "sandstorm": 3, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10, "note": "샤말 가능" },
-      { "month": "4월", "avgTemp": 28, "avgHighLow": "34/22", "sandstorm": 4, "weekend": 8, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 9, "note": "고온 시작" },
-      { "month": "5월", "avgTemp": 33, "avgHighLow": "39/27", "sandstorm": 4, "weekend": 8, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10, "note": "폭염 주의" },
-      { "month": "6월", "avgTemp": 35, "avgHighLow": "41/29", "sandstorm": 3, "weekend": 10, "holidayWeekday": 0, "fixedOff": 12, "eqOff8h": 12, "note": "폭염/작업시간 조정" },
-      { "month": "7월", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 2, "weekend": 8, "holidayWeekday": 0, "fixedOff": 12, "eqOff8h": 12, "note": "최고 폭염" },
-      { "month": "8월", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 2, "weekend": 10, "holidayWeekday": 0, "fixedOff": 12, "eqOff8h": 12, "note": "최고 폭염" },
-      { "month": "9월", "avgTemp": 34, "avgHighLow": "40/28", "sandstorm": 2, "weekend": 8, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10, "note": "점진적 완화" },
-      { "month": "10월", "avgTemp": 30, "avgHighLow": "36/24", "sandstorm": 2, "weekend": 8, "holidayWeekday": 0, "fixedOff": 9, "eqOff8h": 9, "note": "작업 우수" },
-      { "month": "11월", "avgTemp": 26, "avgHighLow": "31/20", "sandstorm": 2, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10, "note": "성수기" },
-      { "month": "12월", "avgTemp": 21, "avgHighLow": "26/16", "sandstorm": 2, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 9, "note": "기온 양호" }
+      { "month": "1월", "avgTemp": 19, "avgHighLow": "24/14", "sandstorm": 1, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 9.0, "note": "신정 포함" },
+      { "month": "2월", "avgTemp": 20, "avgHighLow": "26/15", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 10.0, "note": "라마단 영향(근무시간 단축 등가 반영)" },
+      { "month": "3월", "avgTemp": 23, "avgHighLow": "29/18", "sandstorm": 2, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 12.0, "note": "라마단 영향 + 샤말 시즌 시작" },
+      { "month": "4월", "avgTemp": 28, "avgHighLow": "34/22", "sandstorm": 2, "weekend": 8, "holidayWeekday": 2, "fixedOff": 10, "eqOff8h": 10.0, "note": "Eid al-Fitr(월배분 반영)" },
+      { "month": "5월", "avgTemp": 33, "avgHighLow": "39/27", "sandstorm": 3, "weekend": 8, "holidayWeekday": 3, "fixedOff": 11, "eqOff8h": 11.0, "note": "Arafah+Eid al-Adha(월배분 반영)" },
+      { "month": "6월", "avgTemp": 35, "avgHighLow": "41/29", "sandstorm": 2, "weekend": 10, "holidayWeekday": 1, "fixedOff": 11, "eqOff8h": 12.5, "note": "여름 미드데이 작업 제한(등가 반영)" },
+      { "month": "7월", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 11.0, "note": "폭염 미드데이 작업 제한(등가 반영)" },
+      { "month": "8월", "avgTemp": 37, "avgHighLow": "43/31", "sandstorm": 1, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 13.0, "note": "폭염 미드데이 작업 제한(등가 반영)" },
+      { "month": "9월", "avgTemp": 34, "avgHighLow": "40/28", "sandstorm": 1, "weekend": 8, "holidayWeekday": 1, "fixedOff": 9, "eqOff8h": 10.5, "note": "Prophet’s Birthday(월배분) + 미드데이 제한 일부" },
+      { "month": "10월", "avgTemp": 30, "avgHighLow": "36/24", "sandstorm": 1, "weekend": 8, "holidayWeekday": 0, "fixedOff": 8, "eqOff8h": 8.0, "note": "작업 우수" },
+      { "month": "11월", "avgTemp": 26, "avgHighLow": "31/20", "sandstorm": 1, "weekend": 10, "holidayWeekday": 0, "fixedOff": 10, "eqOff8h": 10.0, "note": "성수기" },
+      { "month": "12월", "avgTemp": 21, "avgHighLow": "26/16", "sandstorm": 1, "weekend": 8, "holidayWeekday": 3, "fixedOff": 11, "eqOff8h": 11.0, "note": "Commemoration/National Day(월배분 반영)" }
     ]
   },
   "VNM": {
@@ -155,87 +83,15 @@
         "cement": "USD/t"
       },
       "series": [
-        {
-          "period": "2024Q1",
-          "brent": 82.5,
-          "lng": 13.8,
-          "copper": 8500,
-          "aluminium": 2250,
-          "rebar": 560,
-          "cement": 58
-        },
-        {
-          "period": "2024Q2",
-          "brent": 84.2,
-          "lng": 12.9,
-          "copper": 9000,
-          "aluminium": 2380,
-          "rebar": 565,
-          "cement": 59
-        },
-        {
-          "period": "2024Q3",
-          "brent": 80.1,
-          "lng": 12.2,
-          "copper": 9100,
-          "aluminium": 2400,
-          "rebar": 570,
-          "cement": 60
-        },
-        {
-          "period": "2024Q4",
-          "brent": 77.6,
-          "lng": 11.6,
-          "copper": 9400,
-          "aluminium": 2450,
-          "rebar": 575,
-          "cement": 61
-        },
-        {
-          "period": "2025Q1",
-          "brent": 75,
-          "lng": 11.2,
-          "copper": 9800,
-          "aluminium": 2500,
-          "rebar": 580,
-          "cement": 62
-        },
-        {
-          "period": "2025Q2",
-          "brent": 73.8,
-          "lng": 10.8,
-          "copper": 10200,
-          "aluminium": 2550,
-          "rebar": 585,
-          "cement": 63
-        },
-        {
-          "period": "2025Q3",
-          "brent": 71.9,
-          "lng": 10.6,
-          "copper": 10900,
-          "aluminium": 2620,
-          "rebar": 590,
-          "cement": 64
-        },
-        {
-          "period": "2025Q4",
-          "brent": 68.4,
-          "lng": 11.1,
-          "copper": 12100,
-          "aluminium": 2850,
-          "rebar": 595,
-          "cement": 65
-        },
-        {
-          "period": "2026Q1",
-          "brent": 65.3,
-          "lng": 11.1,
-          "copper": 13150,
-          "aluminium": 3010,
-          "rebar": 600,
-          "cement": 66
-        }
+        { "period": "2024Q1", "brent": 82.5, "lng": 13.8, "copper": 8500, "aluminium": 2250, "rebar": 560, "cement": 58 },
+        { "period": "2024Q2", "brent": 84.2, "lng": 12.9, "copper": 9000, "aluminium": 2380, "rebar": 565, "cement": 59 },
+        { "period": "2024Q3", "brent": 80.1, "lng": 12.2, "copper": 9100, "aluminium": 2400, "rebar": 570, "cement": 60 },
+        { "period": "2024Q4", "brent": 77.6, "lng": 11.6, "copper": 9400, "aluminium": 2450, "rebar": 575, "cement": 61 },
+        { "period": "2025Q1", "brent": 75.0, "lng": 11.2, "copper": 9800, "aluminium": 2500, "rebar": 580, "cement": 62 },
+        { "period": "2025Q2", "brent": 73.8, "lng": 10.8, "copper": 10200, "aluminium": 2550, "rebar": 585, "cement": 63 },
+        { "period": "2025Q3", "brent": 71.9, "lng": 10.6, "copper": 10900, "aluminium": 2620, "rebar": 590, "cement": 64 },
+        { "period": "2025Q4", "brent": 68.4, "lng": 11.1, "copper": 12100, "aluminium": 2850, "rebar": 595, "cement": 65 },
+        { "period": "2026Q1", "brent": 65.3, "lng": 11.1, "copper": 13150, "aluminium": 3010, "rebar": 600, "cement": 66 }
       ]
     },
     "materials": [
