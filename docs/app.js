@@ -1235,7 +1235,7 @@ function renderDurationCalcView(d) {
         <div style="font-weight:900;">투입 인원</div>
         <div style="display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap;">
           <input type="number" min="1" data-duration-field="crew" value="${esc(durationCalcState.crew)}"
-            placeholder="(입력)"
+            placeholder=" "
             style="width:140px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
           <span class="muted">명</span>
         </div>
@@ -1257,7 +1257,7 @@ function renderDurationCalcView(d) {
       <div style="font-weight:900;">목표 공사기간</div>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
         <input type="number" min="1" data-duration-field="targetCalendarDays" value="${esc(durationCalcState.targetCalendarDays)}"
-          placeholder="달력일(예: 180)"
+          placeholder=" "
           style="width:180px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
         <span class="muted">일</span>
       </div>
@@ -1606,3 +1606,4 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
