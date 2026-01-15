@@ -672,7 +672,8 @@ function renderMatCalcView(d) {
             />
             <span class="muted" style="margin-left:6px;">${esc(it.qtyLabel)}</span>
           </td>
-          <td class="right"><b>${cost !== null ? fmtNum(cost, 2) : "—"}</b></td>
+          <!-- ✅ 각 행 금액도 즉시 갱신될 수 있도록 id 부여 -->
+          <td class="right"><b id="matCost_${esc(it.key)}">${cost !== null ? fmtNum(cost, 2) : "—"}</b></td>
         </tr>
       `;
     })
@@ -719,6 +720,24 @@ function updateMatTotal() {
   const el = document.getElementById("matTotal");
   if (!el) return;
   el.textContent = hasAny ? `합계: ${fmtNum(sum, 2)} USD` : `합계: —`;
+}
+
+// ✅ (추가) matcalc: 특정 품목 행 금액만 즉시 갱신
+function updateMatRowCost(key) {
+  if (view !== "matcalc") return;
+  const d = countryData?.[selectedISO];
+  if (!d) return;
+
+  const period = matCalcState.period || getLatestPeriod(d) || "";
+  const qtyNum = toNum(matCalcState.qty[key]);
+  const up = getMaterialUnitPrice(d, key, period);
+
+  const cost = qtyNum !== null && up.usd !== null ? qtyNum * up.usd : null;
+
+  const el = document.getElementById(`matCost_${key}`);
+  if (!el) return;
+
+  el.textContent = cost !== null ? fmtNum(cost, 2) : "—";
 }
 
 // ============== laborcalc (계산) ==============
@@ -1578,10 +1597,11 @@ async function init() {
     infoEl.addEventListener("input", (e) => {
       const t = e.target;
 
-      // mat qty는 즉시 합계만 업데이트
+      // mat qty: 행 금액 + 합계 즉시 업데이트
       const k = t?.getAttribute?.("data-matqty");
       if (k) {
         matCalcState.qty[k] = t.value;
+        updateMatRowCost(k); // ✅ 추가
         updateMatTotal();
         return;
       }
@@ -1606,4 +1626,3 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
-
