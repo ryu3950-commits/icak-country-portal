@@ -99,7 +99,23 @@ let laborCalcState = {
   premDayNight: false,
   premEquip: false,
 
-  totalManDays: "", // 총 인일
+  // ✅ 작업량 입력
+  // - workMode: 작업량을 어떤 지표로 입력할지
+  //   * mandays: 총 인일 직접 입력
+  //   * panelCleaning: 패널 세척 면적(m²) 입력 → 내부 생산성으로 인일 환산
+  //   * rebarTon: 철근 물량(t) → 내부 생산성으로 인일 환산
+  //   * concreteM3: 콘크리트 물량(m³) → 내부 생산성으로 인일 환산
+  //   * formworkM2: 거푸집 물량(m²) → 내부 생산성으로 인일 환산
+  //   * pvMw: 태양광 설치용량(MW) → 내부 생산성으로 인일 환산
+  workMode: "mandays", // mandays | panelCleaning | rebarTon | concreteM3 | formworkM2 | pvMw
+  totalManDays: "", // 총 인일(직접 입력)
+  workQty: "", // 물량 입력(단위는 workMode에 따라 달라짐)
+  panelAreaM2: "", // (호환) 과거 필드
+
+  // ✅ 공기(기간) 계산용 입력(인건비 계산에서도 동일 로직 사용)
+  crew: "", // 투입 인원(명)
+  shiftMode: "day", // day | daynight
+  targetCalendarDays: "", // 목표 공사기간(달력일)
 
   robotUse: false,
 
@@ -110,6 +126,84 @@ let laborCalcState = {
   replaceManDaysPerRobotDay: "10", // 로봇 대체(인일/대·일)
   robots: "1", // 로봇 대수
 };
+
+// ✅ 작업유형별 내부 생산성(UI에는 노출하지 않음)
+// 필요 시 수치만 여기서 조정하면 됨.
+const PRODUCTIVITY = {
+  // 패널 세척(수동) 1인·일 당 처리 면적 (m²/man-day)
+  // ⚠️ 참고용 기본값: 현장/장비/세척 방식에 따라 크게 달라질 수 있음.
+  panelCleaningM2PerManDay: 800,
+
+  // 철근 1인·일 당 처리 물량 (t/man-day)
+  // ⚠️ 배근 난이도/가공·운반/작업여건에 따라 변동
+  rebarTonPerManDay: 0.12,
+
+  // 콘크리트 1인·일 당 타설 물량 (m³/man-day)
+  // ⚠️ 펌프, 동선, 타설 두께 등에 따라 변동
+  concreteM3PerManDay: 5.0,
+
+  // 거푸집 1인·일 당 설치/해체 면적 (m²/man-day)
+  formworkM2PerManDay: 12.0,
+
+  // 태양광 설치용량 1인·일 당 처리량 (MW/man-day)
+  // ⚠️ 지반, 구조, 공법, 모듈/랙 종류 등에 따라 변동
+  pvMwPerManDay: 0.03,
+};
+
+function getWorkModeMeta(mode) {
+  switch (mode) {
+    case "panelCleaning":
+      return {
+        label: "패널 세척",
+        unit: "m²",
+        prod: PRODUCTIVITY.panelCleaningM2PerManDay,
+      };
+    case "rebarTon":
+      return {
+        label: "철근",
+        unit: "t",
+        prod: PRODUCTIVITY.rebarTonPerManDay,
+      };
+    case "concreteM3":
+      return {
+        label: "콘크리트",
+        unit: "m³",
+        prod: PRODUCTIVITY.concreteM3PerManDay,
+      };
+    case "formworkM2":
+      return {
+        label: "거푸집",
+        unit: "m²",
+        prod: PRODUCTIVITY.formworkM2PerManDay,
+      };
+    case "pvMw":
+      return {
+        label: "태양광 설치",
+        unit: "MW",
+        prod: PRODUCTIVITY.pvMwPerManDay,
+      };
+    case "mandays":
+    default:
+      return { label: "총 인일", unit: "인일", prod: null };
+  }
+}
+
+function computeManDaysFromWorkMode(state) {
+  const mode = state?.workMode || "mandays";
+  const meta = getWorkModeMeta(mode);
+
+  if (mode === "mandays") {
+    const md = toNum(state?.totalManDays);
+    return { mode, meta, qty: null, manDays: md };
+  }
+
+  // 호환: panelCleaning은 panelAreaM2를 우선 사용
+  const rawQty = mode === "panelCleaning" ? pick(state, ["workQty", "panelAreaM2"], "") : pick(state, ["workQty"], "");
+  const qty = toNum(rawQty);
+  const prod = meta.prod;
+  const manDays = qty !== null && prod !== null && prod > 0 ? qty / prod : null;
+  return { mode, meta, qty, manDays };
+}
 
 // ============== helpers ==============
 const PERIOD_RE = /^(\\d{4})Q([1-4])$/;
@@ -592,19 +686,16 @@ function renderLaborBlock(d, opts = {}) {
   const robotDaily = getRobotDailyUsdDefault(d);
   const replaceDefault = getRobotReplaceManDaysPerRobotDayDefault();
 
-  const yearSelect = `
-    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
-      <div style="font-weight:900;">인건비 연도</div>
-      ${years.length
-        ? `<select data-labor-year style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
-            ${years.map(v => `<option value="${v}" ${v === y ? "selected" : ""}>${v}</option>`).join("")}
-          </select>`
-        : `<input type="number" data-labor-year value="${y}"
-            style="width:120px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px;" />
-           <span class="muted">(연도별 데이터 없음)</span>`}
-    </div>
-  `;
-
+  const yearSelect = years.length
+    ? `
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px;">
+        <div style="font-weight:900;">인건비 연도</div>
+        <select data-labor-year style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+          ${years.map(v => `<option value="${v}" ${v === y ? "selected" : ""}>${v}</option>`).join("")}
+        </select>
+      </div>
+    `
+    : "";
 
   return `
     <div style="margin-top:16px; font-weight:900;">인건비</div>
@@ -684,7 +775,7 @@ function renderMatCalcView(d) {
             />
             <span class="muted" style="margin-left:6px;">${esc(it.qtyLabel)}</span>
           </td>
-          <td class="right"><b id="matCost_${esc(it.key)}">${cost !== null ? fmtNum(cost, 2) : "—"}</b></td>
+          <td class="right" data-matcost="${esc(it.key)}"><b>${cost !== null ? fmtNum(cost, 2) : "—"}</b></td>
         </tr>
       `;
     })
@@ -705,8 +796,6 @@ function renderMatCalcView(d) {
       <tbody>${rows}</tbody>
     </table>
     <div id="matTotal" style="margin-top:12px; font-weight:900; text-align:right; font-size:16px;"></div>
-    ${renderLaborBlock(d, { mode: "simple" })}
-
   `;
 }
 
@@ -735,7 +824,7 @@ function updateMatTotal() {
   el.textContent = hasAny ? `합계: ${fmtNum(sum, 2)} USD` : `합계: —`;
 }
 
-// ✅ 자재비 계산: 입력 즉시 "각 자재별 금액"만 업데이트(전체 렌더 없이)
+// ✅ 자재비 계산: 항목별 금액도 즉시 업데이트(리렌더 없이)
 function updateMatRowCost(key) {
   if (view !== "matcalc") return;
   const d = countryData?.[selectedISO];
@@ -746,9 +835,9 @@ function updateMatRowCost(key) {
   const up = getMaterialUnitPrice(d, key, period);
   const cost = qtyNum !== null && up.usd !== null ? qtyNum * up.usd : null;
 
-  const el = document.getElementById(`matCost_${key}`);
-  if (!el) return;
-  el.textContent = cost !== null ? fmtNum(cost, 2) : "—";
+  const td = document.querySelector(`td[data-matcost="${CSS.escape(String(key))}"]`);
+  if (!td) return;
+  td.innerHTML = `<b>${cost !== null ? fmtNum(cost, 2) : "—"}</b>`;
 }
 
 // ============== laborcalc (계산) ==============
@@ -761,15 +850,37 @@ const LABOR_PREM = {
 
 function computeLaborCalc(d) {
   const y = Number(laborCalcState.year) || getLatestLaborYear(d) || new Date().getFullYear();
-  const role = laborCalcState.role === "skilled" ? "skilled" : "unskilled";
+  const wageRole = laborCalcState.role === "skilled" ? "skilled" : "unskilled";
+  const workMode = laborCalcState.workMode || "mandays";
 
   const base = (() => {
     const ov = toNum(laborCalcState.wageOverride);
     if (ov !== null && ov > 0) return ov;
-    return getLaborWageByYear(d, role, y);
+    return getLaborWageByYear(d, wageRole, y);
   })();
 
-  const totalManDays = toNum(laborCalcState.totalManDays);
+  // ✅ 총 인일(직접 입력 or 물량 → 생산성(내부) 기반 환산)
+  const workMeta = getWorkModeMeta(workMode);
+  const workQty = workMode === "mandays" ? null : toNum(laborCalcState.workQty);
+
+  const totalManDays = (() => {
+    if (workMode === "mandays") return toNum(laborCalcState.totalManDays);
+    if (!workMeta) return null;
+    if (workQty === null || workQty <= 0) return null;
+    const prod = toNum(workMeta.prod);
+    if (prod === null || prod <= 0) return null;
+    return workQty / prod;
+  })();
+
+  // ✅ 작업량 정보(표시/CSV 등에 활용 가능)
+  const work = {
+    mode: workMode,
+    label: workMode === "mandays" ? "총 인일" : workMeta.label,
+    qty: workMode === "mandays" ? totalManDays : workQty,
+    unit: workMode === "mandays" ? "인일" : workMeta.unit,
+    productivity: workMode === "mandays" ? null : workMeta.prod,
+    derivedManDays: totalManDays,
+  };
 
   const prem =
     (laborCalcState.premHigh ? LABOR_PREM.high : 1) *
@@ -779,6 +890,26 @@ function computeLaborCalc(d) {
 
   const effectiveWage = base !== null ? base * prem : null;
   const laborCostNoRobot = effectiveWage !== null && totalManDays !== null ? effectiveWage * totalManDays : null;
+
+  // ✅ 공사기간(옵션) : duration 탭과 동일 로직을 인건비 계산에도 적용
+  const crewNum = toNum(laborCalcState.crew);
+  const crew = crewNum !== null && crewNum > 0 ? crewNum : null;
+  const shiftMode = laborCalcState.shiftMode || "day";
+  const shiftM = getShiftMultiplier(shiftMode);
+
+  const { ratio: workRatio, detail: ratioDetail } = computeWorkabilityRatio(d, y);
+  const workDaysNeeded = totalManDays !== null && crew !== null ? totalManDays / (crew * shiftM) : null;
+  const calendarDaysNeeded = workDaysNeeded !== null ? workDaysNeeded / workRatio : null;
+
+  const targetCal = toNum(laborCalcState.targetCalendarDays);
+  const crewNeededDay =
+    totalManDays !== null && targetCal !== null && targetCal > 0
+      ? totalManDays / (targetCal * workRatio * 1.0)
+      : null;
+  const crewNeededDayNight =
+    totalManDays !== null && targetCal !== null && targetCal > 0
+      ? totalManDays / (targetCal * workRatio * 1.6)
+      : null;
 
   // ✅ R 기본값(500) + 입력 보정
   const robotDailyCandidate = toNum(laborCalcState.robotDailyUsd);
@@ -793,11 +924,25 @@ function computeLaborCalc(d) {
   if (!laborCalcState.robotUse) {
     return {
       year: y,
+      work,
       baseWage: base,
       effectiveWage,
       prem,
       totalManDays,
       laborCostNoRobot,
+      workMode,
+      duration: {
+        workRatio,
+        ratioDetail,
+        crew,
+        shiftMode,
+        shiftM,
+        workDaysNeeded,
+        calendarDaysNeeded,
+        targetCal,
+        crewNeededDay,
+        crewNeededDayNight,
+      },
       robot: null,
     };
   }
@@ -837,11 +982,25 @@ function computeLaborCalc(d) {
 
   return {
     year: y,
+    work,
     baseWage: base,
     effectiveWage,
     prem,
     totalManDays,
     laborCostNoRobot,
+    workMode,
+    duration: {
+      workRatio,
+      ratioDetail,
+      crew,
+      shiftMode,
+      shiftM,
+      workDaysNeeded,
+      calendarDaysNeeded,
+      targetCal,
+      crewNeededDay,
+      crewNeededDayNight,
+    },
     robot: {
       robotDailyUsd: robotDailyDefault,
       fixedCostUsd,
@@ -946,6 +1105,51 @@ function renderLaborCalcView(d) {
     `;
   })();
 
+  const durationRows = (() => {
+    const du = res.duration || {};
+    const ratio = du.workRatio;
+    const ratioText = typeof ratio === "number" ? fmtNum(ratio * 100, 1) + "%" : "—";
+    const workDays = du.workDaysNeeded;
+    const calDays = du.calendarDaysNeeded;
+    const target = du.targetCal;
+    const crewDay = du.crewNeededDay;
+    const crewDN = du.crewNeededDayNight;
+
+    const targetRows =
+      typeof target === "number" && target > 0
+        ? `
+          <tr><td>목표 공사기간</td><td class="right"><b>${fmtNum(target, 0)} 일</b></td></tr>
+          <tr><td>필요 인원(주간 기준)</td><td class="right"><b>${crewDay !== null && crewDay !== undefined ? fmtNum(Math.ceil(crewDay), 0) + " 명" : "—"}</b></td></tr>
+          <tr><td>필요 인원(주야간 기준)</td><td class="right"><b>${crewDN !== null && crewDN !== undefined ? fmtNum(Math.ceil(crewDN), 0) + " 명" : "—"}</b></td></tr>
+        `
+        : "";
+
+    return `
+      <tr><td>작업가능비율</td><td class="right"><b>${esc(ratioText)}</b></td></tr>
+      <tr><td>필요 작업일수</td><td class="right"><b>${workDays !== null && workDays !== undefined ? fmtNum(workDays, 1) + " 일" : "—"}</b></td></tr>
+      <tr><td>예상 공사기간(달력일)</td><td class="right"><b>${calDays !== null && calDays !== undefined ? fmtNum(calDays, 0) + " 일" : "—"}</b></td></tr>
+      ${targetRows}
+    `;
+  })();
+
+  const workRows = (() => {
+    const w = res.work;
+    if (!w) return "";
+
+    const qtyText =
+      w.mode === "mandays"
+        ? "—"
+        : w.qty !== null && w.qty !== undefined
+          ? `${fmtNum(w.qty, 2)} ${esc(w.unit)}`
+          : "—";
+
+    return `
+      <tr><td><b>작업 기준</b></td><td class="right"><b>${esc(w.label)}</b></td></tr>
+      <tr><td>입력 물량</td><td class="right"><b>${qtyText}</b></td></tr>
+      <tr><td><b>산정 총 인일</b></td><td class="right"><b>${res.totalManDays !== null ? fmtNum(res.totalManDays, 1) + " 인일" : "—"}</b></td></tr>
+    `;
+  })();
+
   return `
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
       <div style="font-weight:900;">연도</div>
@@ -996,11 +1200,66 @@ function renderLaborCalcView(d) {
 
     <div style="margin-top:12px; border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
       <div style="font-weight:900;">작업량 입력</div>
+
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
-        <input type="number" min="0" step="0.1" data-labor-field="totalManDays" value="${esc(laborCalcState.totalManDays)}"
-          placeholder="총 인일(예: 4000)"
-          style="width:200px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
-        <span class="muted">인일</span>
+        <span class="muted">기준</span>
+        <select data-labor-field="workMode"
+          style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+          <option value="mandays" ${laborCalcState.workMode === "mandays" ? "selected" : ""}>총 인일</option>
+          <option value="panelCleaning" ${laborCalcState.workMode === "panelCleaning" ? "selected" : ""}>패널 세척(m²)</option>
+          <option value="rebarTon" ${laborCalcState.workMode === "rebarTon" ? "selected" : ""}>철근(t)</option>
+          <option value="concreteM3" ${laborCalcState.workMode === "concreteM3" ? "selected" : ""}>콘크리트(m³)</option>
+          <option value="formworkM2" ${laborCalcState.workMode === "formworkM2" ? "selected" : ""}>거푸집(m²)</option>
+          <option value="pvMw" ${laborCalcState.workMode === "pvMw" ? "selected" : ""}>태양광 설치(MW)</option>
+        </select>
+
+        ${laborCalcState.workMode === "mandays"
+          ? `
+            <input type="number" min="0" step="0.1" data-labor-field="totalManDays" value="${esc(laborCalcState.totalManDays)}"
+              placeholder="총 인일(예: 4000)"
+              style="width:200px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+            <span class="muted">인일</span>
+          `
+          : `
+            <input type="number" min="0" step="1" data-labor-field="workQty" value="${esc(laborCalcState.workQty || laborCalcState.panelAreaM2)}"
+              placeholder="물량 입력"
+              style="width:220px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+            <span class="muted">${esc(getWorkModeMeta(laborCalcState.workMode || "panelCleaning")?.unit || "")}</span>
+            <span class="muted" style="margin-left:auto;">환산 인일: <b>${res.totalManDays !== null ? fmtNum(res.totalManDays, 1) : "—"}</b> 인일</span>
+          `}
+      </div>
+      <div class="muted" style="margin-top:6px;">
+        (생산성은 내부 기본값으로 자동 환산됩니다)
+      </div>
+    </div>
+
+    <div style="margin-top:12px; border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
+      <div style="font-weight:900;">공사기간(옵션)</div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <span class="muted">투입 인원</span>
+          <input type="number" min="1" step="1" data-labor-field="crew" value="${esc(laborCalcState.crew)}"
+            placeholder="(예: 40)"
+            style="width:120px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+          <span class="muted">명</span>
+        </label>
+
+        <label style="display:flex; align-items:center; gap:8px;">
+          <span class="muted">작업 방식</span>
+          <select data-labor-field="shiftMode"
+            style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+            <option value="day" ${laborCalcState.shiftMode === "day" ? "selected" : ""}>주간</option>
+            <option value="daynight" ${laborCalcState.shiftMode === "daynight" ? "selected" : ""}>주야간</option>
+          </select>
+        </label>
+
+        <label style="display:flex; align-items:center; gap:8px;">
+          <span class="muted">목표기간</span>
+          <input type="number" min="1" step="1" data-labor-field="targetCalendarDays" value="${esc(laborCalcState.targetCalendarDays)}"
+            placeholder="(예: 180)"
+            style="width:140px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+          <span class="muted">일</span>
+        </label>
       </div>
     </div>
 
@@ -1014,12 +1273,15 @@ function renderLaborCalcView(d) {
       ${laborCalcState.robotUse ? robotBlock : ""}
     </div>
 
+
     <div style="margin-top:14px;">
       <div style="font-weight:900; margin-bottom:8px;">결과</div>
       <table class="table">
         <thead><tr><th>항목</th><th class="right">값</th></tr></thead>
         <tbody>
+          ${workRows}
           ${resultRows}
+          ${durationRows}
         </tbody>
       </table>
     </div>
@@ -1407,6 +1669,7 @@ function scheduleRerender() {
 
   const active = document.activeElement;
   const key =
+    active?.getAttribute?.("data-matqty") ||
     active?.getAttribute?.("data-duration-field") ||
     active?.getAttribute?.("data-labor-field") ||
     null;
@@ -1420,6 +1683,7 @@ function scheduleRerender() {
     if (key) {
       // duration 우선 → labor도 같이
       const el =
+        document.querySelector(`[data-matqty="${key}"]`) ||
         document.querySelector(`[data-duration-field="${key}"]`) ||
         document.querySelector(`[data-labor-field="${key}"]`);
 
@@ -1660,15 +1924,14 @@ async function init() {
       const lf = t?.getAttribute?.("data-labor-field");
       if (lf) {
         laborCalcState[lf] = t.type === "checkbox" ? t.checked : t.value;
+
         renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
         return;
       }
 
       // costs에서 인건비 연도 변경 UI(data-labor-year)
-      if (t && t.matches('[data-labor-year]')) {
-        // ✅ costs(표시) / laborcalc(계산) 연도 동기화
+      if (t && t.matches('select[data-labor-year]')) {
         durationCalcState.year = t.value;
-        laborCalcState.year = t.value;
         renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
         return;
       }
@@ -1678,20 +1941,11 @@ async function init() {
     infoEl.addEventListener("input", (e) => {
       const t = e.target;
 
-      // ✅ mat qty는 즉시 "행 금액" + "합계" 업데이트 (전체 렌더 없이)
+      // mat qty는 즉시 합계만 업데이트
       const k = t?.getAttribute?.("data-matqty");
       if (k) {
         matCalcState.qty[k] = t.value;
-        updateMatRowCost(k);
         updateMatTotal();
-        return;
-      }
-
-      // ✅ 공사원가/자재비 탭 인건비 연도 입력(즉시 반영)
-      if (t && t.matches('[data-labor-year]')) {
-        durationCalcState.year = t.value;
-        laborCalcState.year = t.value;
-        scheduleRerender();
         return;
       }
 
