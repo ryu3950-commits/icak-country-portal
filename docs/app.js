@@ -199,7 +199,10 @@ function computeManDaysFromWorkMode(state) {
   }
 
   // 호환: panelCleaning은 panelAreaM2를 우선 사용
-  const rawQty = mode === "panelCleaning" ? pick(state, ["workQty", "panelAreaM2"], "") : pick(state, ["workQty"], "");
+  const rawQty =
+    mode === "panelCleaning"
+      ? pick(state, ["workQty", "panelAreaM2"], "")
+      : pick(state, ["workQty"], "");
   const qty = toNum(rawQty);
   const prod = meta.prod;
   const manDays = qty !== null && prod !== null && prod > 0 ? qty / prod : null;
@@ -207,7 +210,8 @@ function computeManDaysFromWorkMode(state) {
 }
 
 // ============== helpers ==============
-const PERIOD_RE = /^(\\d{4})Q([1-4])$/;
+// ✅ FIX: 자재비 연도 선택 버그(정규식 백슬래시) - 2026Q1 같은 period가 매칭되도록 수정
+const PERIOD_RE = /^(\d{4})Q([1-4])$/;
 
 const isIso3 = (v) => {
   if (typeof v !== "string") return false;
@@ -343,7 +347,13 @@ function getISOFromProps(props = {}) {
 
 function isoFallbackByName(name) {
   const n = norm(name);
-  if (n.includes("united arab emirates") || n.includes("uae") || n.includes("아랍에미리트") || n.includes("아랍 에미리트")) return "ARE";
+  if (
+    n.includes("united arab emirates") ||
+    n.includes("uae") ||
+    n.includes("아랍에미리트") ||
+    n.includes("아랍 에미리트")
+  )
+    return "ARE";
   if (n.includes("vietnam") || n.includes("베트남")) return "VNM";
   return null;
 }
@@ -443,29 +453,31 @@ function getLatestPeriod(d) {
   return p.length ? p[p.length - 1] : "";
 }
 
-
 // ✅ materialsQuarterly 연도 목록(2024,2025...)
 function listAvailableMaterialYears(d) {
   const periods = listAvailablePeriods(d);
-  const years = [...new Set(periods
-    .map(p => {
-      const m = String(p).match(PERIOD_RE);
-      return m ? Number(m[1]) : null;
-    })
-    .filter(v => Number.isFinite(v))
-  )].sort((a,b)=>a-b);
+  const years = [
+    ...new Set(
+      periods
+        .map((p) => {
+          const m = String(p).match(PERIOD_RE);
+          return m ? Number(m[1]) : null;
+        })
+        .filter((v) => Number.isFinite(v))
+    ),
+  ].sort((a, b) => a - b);
   return years;
 }
 
 function getLatestMaterialYear(d) {
   const ys = listAvailableMaterialYears(d);
-  return ys.length ? ys[ys.length-1] : null;
+  return ys.length ? ys[ys.length - 1] : null;
 }
 
 function listPeriodsOfYear(d, year) {
   const y = Number(year);
   if (!Number.isFinite(y)) return listAvailablePeriods(d);
-  return listAvailablePeriods(d).filter(p => String(p).startsWith(String(y) + 'Q'));
+  return listAvailablePeriods(d).filter((p) => String(p).startsWith(String(y) + "Q"));
 }
 
 function getQuarterRow(d, period) {
@@ -547,10 +559,7 @@ function getRobotReplaceManDaysPerRobotDayDefault() {
 
 // ✅ 로봇 일단가 기본값: 데이터 있으면 사용, 없으면 500
 function getRobotDailyUsdDefault(d) {
-  const fromData =
-    toNum(d?.robotCleaning?.robotDailyUsd) ??
-    toNum(d?.robotDailyUSD) ??
-    null;
+  const fromData = toNum(d?.robotCleaning?.robotDailyUsd) ?? toNum(d?.robotDailyUSD) ?? null;
 
   return fromData !== null ? fromData : 500;
 }
@@ -573,7 +582,9 @@ function csvEscape(v) {
 }
 function rowsToCSV(headers, rows) {
   const head = headers.map(csvEscape).join(",");
-  const body = rows.map((r) => r.map(csvEscape).join(",")).join("\n");
+  const body = rows
+    .map((r) => r.map(csvEscape).join(","))
+    .join("\n");
   return "\ufeff" + head + "\n" + body;
 }
 function downloadCSV(filename, csvText) {
@@ -627,7 +638,9 @@ function exportMaterialsAndNonworkCSV() {
     return Number.isFinite(n) ? n : 99;
   };
 
-  const sorted = [...arr].sort((a, b) => monthIndex(a.month ?? a.m ?? a.mon) - monthIndex(b.month ?? b.m ?? b.mon));
+  const sorted = [...arr].sort(
+    (a, b) => monthIndex(a.month ?? a.m ?? a.mon) - monthIndex(b.month ?? b.m ?? b.mon)
+  );
 
   const nwRows = sorted.map((r) => {
     const month = pick(r, ["month", "m", "mon"], "");
@@ -919,7 +932,7 @@ function updateMatRowCost(key) {
 // ============== laborcalc (계산) ==============
 const LABOR_PREM = {
   high: 1.15,
-  electrical: 1.10,
+  electrical: 1.1,
   daynight: 1.25,
   equip: 1.05,
 };
@@ -979,13 +992,9 @@ function computeLaborCalc(d) {
 
   const targetCal = toNum(laborCalcState.targetCalendarDays);
   const crewNeededDay =
-    totalManDays !== null && targetCal !== null && targetCal > 0
-      ? totalManDays / (targetCal * workRatio * 1.0)
-      : null;
+    totalManDays !== null && targetCal !== null && targetCal > 0 ? totalManDays / (targetCal * workRatio * 1.0) : null;
   const crewNeededDayNight =
-    totalManDays !== null && targetCal !== null && targetCal > 0
-      ? totalManDays / (targetCal * workRatio * 1.6)
-      : null;
+    totalManDays !== null && targetCal !== null && targetCal > 0 ? totalManDays / (targetCal * workRatio * 1.6) : null;
 
   // ✅ R 기본값(500) + 입력 보정
   const robotDailyCandidate = toNum(laborCalcState.robotDailyUsd);
@@ -994,8 +1003,7 @@ function computeLaborCalc(d) {
 
   // ✅ F 기본값(10000) + 입력 보정
   const fixedCandidate = toNum(laborCalcState.fixedCostUsd);
-  const fixedCostUsd =
-    fixedCandidate !== null && fixedCandidate >= 0 ? fixedCandidate : getRobotFixedCostDefault(d);
+  const fixedCostUsd = fixedCandidate !== null && fixedCandidate >= 0 ? fixedCandidate : getRobotFixedCostDefault(d);
 
   if (!laborCalcState.robotUse) {
     return {
@@ -1036,25 +1044,19 @@ function computeLaborCalc(d) {
   const robotTotalDays = replaceManDays !== null ? replaceManDays / mdPerRobotDay : null;
   const robotFleetCalendarDays = robotTotalDays !== null ? robotTotalDays / robots : null;
 
-  const remainManDays =
-    totalManDays !== null && replaceManDays !== null ? Math.max(0, totalManDays - replaceManDays) : null;
+  const remainManDays = totalManDays !== null && replaceManDays !== null ? Math.max(0, totalManDays - replaceManDays) : null;
 
   const laborCostWithRobot = effectiveWage !== null && remainManDays !== null ? effectiveWage * remainManDays : null;
 
   const robotCost = robotTotalDays !== null ? robotTotalDays * robotDailyDefault : null;
 
   // ✅ 총비용에 고정비 포함
-  const totalCostWithRobot =
-    laborCostWithRobot !== null && robotCost !== null
-      ? laborCostWithRobot + robotCost + fixedCostUsd
-      : null;
+  const totalCostWithRobot = laborCostWithRobot !== null && robotCost !== null ? laborCostWithRobot + robotCost + fixedCostUsd : null;
 
   // ✅ Saving = (로봇 미사용 인건비) - (로봇 사용 총비용)
-  const saving =
-    laborCostNoRobot !== null && totalCostWithRobot !== null ? laborCostNoRobot - totalCostWithRobot : null;
+  const saving = laborCostNoRobot !== null && totalCostWithRobot !== null ? laborCostNoRobot - totalCostWithRobot : null;
 
-  const savingRate =
-    saving !== null && laborCostNoRobot !== null && laborCostNoRobot > 0 ? saving / laborCostNoRobot : null;
+  const savingRate = saving !== null && laborCostNoRobot !== null && laborCostNoRobot > 0 ? saving / laborCostNoRobot : null;
 
   return {
     year: y,
@@ -1105,8 +1107,7 @@ function renderLaborCalcView(d) {
   const unit = esc(d?.laborAnnual?.unit || "USD/day");
   const res = computeLaborCalc(d);
 
-  const appliedWageText =
-    res.effectiveWage !== null ? `${fmtNum(res.effectiveWage, 2)} ${unit}` : "—";
+  const appliedWageText = res.effectiveWage !== null ? `${fmtNum(res.effectiveWage, 2)} ${unit}` : "—";
 
   const premText = res.baseWage !== null ? `적용 일급: ${fmtNum(res.baseWage, 2)} × ${fmtNum(res.prem, 3)}` : `적용 일급: —`;
 
@@ -1205,24 +1206,6 @@ function renderLaborCalcView(d) {
       <tr><td>필요 작업일수</td><td class="right"><b>${workDays !== null && workDays !== undefined ? fmtNum(workDays, 1) + " 일" : "—"}</b></td></tr>
       <tr><td>예상 공사기간(달력일)</td><td class="right"><b>${calDays !== null && calDays !== undefined ? fmtNum(calDays, 0) + " 일" : "—"}</b></td></tr>
       ${targetRows}
-    `;
-  })();
-
-  const workRows = (() => {
-    const w = res.work;
-    if (!w) return "";
-
-    const qtyText =
-      w.mode === "mandays"
-        ? "—"
-        : w.qty !== null && w.qty !== undefined
-          ? `${fmtNum(w.qty, 2)} ${esc(w.unit)}`
-          : "—";
-
-    return `
-      <tr><td><b>작업 기준</b></td><td class="right"><b>${esc(w.label)}</b></td></tr>
-      <tr><td>입력 물량</td><td class="right"><b>${qtyText}</b></td></tr>
-      <tr><td><b>산정 총 인일</b></td><td class="right"><b>${res.totalManDays !== null ? fmtNum(res.totalManDays, 1) + " 인일" : "—"}</b></td></tr>
     `;
   })();
 
@@ -1355,7 +1338,6 @@ function renderLaborCalcView(d) {
       <table class="table">
         <thead><tr><th>항목</th><th class="right">값</th></tr></thead>
         <tbody>
-          ${workRows}
           ${resultRows}
           ${durationRows}
         </tbody>
@@ -1375,7 +1357,9 @@ function renderNonWorkView(d) {
     return Number.isFinite(n) ? n : 99;
   };
 
-  const sorted = [...nwd].sort((a, b) => monthIndex(a.month ?? a.m ?? a.mon) - monthIndex(b.month ?? b.m ?? b.mon));
+  const sorted = [...nwd].sort(
+    (a, b) => monthIndex(a.month ?? a.m ?? a.mon) - monthIndex(b.month ?? b.m ?? b.mon)
+  );
 
   const rows = sorted
     .map((r) => {
@@ -1503,6 +1487,11 @@ function computeManDaysFromQuantity(d) {
   const wt = String(durationCalcState.workType || "general");
   const meta = getWorkTypeMeta(wt);
 
+  // ✅ FIX: 기타(general)일 때 quantity 입력을 "총 인일"로 사용(오른쪽 인일 입력칸 제거용)
+  if (wt === "general" && q !== null && q > 0) {
+    return { manDays: q, source: "mandays", meta: getWorkTypeMeta("general"), quantity: q };
+  }
+
   if (q !== null && q > 0 && meta && meta.unitPerManDay) {
     const manDays = q / meta.unitPerManDay;
     return { manDays, source: "quantity", meta, quantity: q };
@@ -1533,33 +1522,25 @@ function renderDurationCalcView(d) {
 
   const { ratio, detail } = computeWorkabilityRatio(d, year);
 
-  const workDaysNeeded =
-    manDays !== null && crew !== null ? manDays / (crew * shiftM) : null;
+  const workDaysNeeded = manDays !== null && crew !== null ? manDays / (crew * shiftM) : null;
 
-  const calendarDaysNeeded =
-    workDaysNeeded !== null ? workDaysNeeded / ratio : null;
+  const calendarDaysNeeded = workDaysNeeded !== null ? workDaysNeeded / ratio : null;
 
   const targetCal = toNum(durationCalcState.targetCalendarDays);
 
   const crewNeededDay =
-    manDays !== null && targetCal !== null && targetCal > 0
-      ? manDays / (targetCal * ratio * 1.0)
-      : null;
+    manDays !== null && targetCal !== null && targetCal > 0 ? manDays / (targetCal * ratio * 1.0) : null;
 
   const crewNeededDayNight =
-    manDays !== null && targetCal !== null && targetCal > 0
-      ? manDays / (targetCal * ratio * 1.6)
-      : null;
+    manDays !== null && targetCal !== null && targetCal > 0 ? manDays / (targetCal * ratio * 1.6) : null;
 
   let altHtml = "";
   if (manDays !== null && targetCal !== null && targetCal > 0 && crew !== null) {
     const feasibleNow = calendarDaysNeeded !== null ? calendarDaysNeeded <= targetCal : false;
 
-    const addCrewDay =
-      crewNeededDay !== null ? Math.max(0, Math.ceil(crewNeededDay) - crew) : null;
+    const addCrewDay = crewNeededDay !== null ? Math.max(0, Math.ceil(crewNeededDay) - crew) : null;
 
-    const addCrewDayNight =
-      crewNeededDayNight !== null ? Math.max(0, Math.ceil(crewNeededDayNight) - crew) : null;
+    const addCrewDayNight = crewNeededDayNight !== null ? Math.max(0, Math.ceil(crewNeededDayNight) - crew) : null;
 
     const needNight = crewNeededDay !== null ? Math.ceil(crewNeededDay) > crew : false;
 
@@ -1575,9 +1556,7 @@ function renderDurationCalcView(d) {
         <tr>
           <td><b>대안(주간 유지)</b></td>
           <td class="right">
-            ${addCrewDay !== null
-              ? `<b>인원 +${fmtNum(addCrewDay, 0)}명</b> 필요 (총 ${fmtNum(Math.ceil(crewNeededDay), 0)}명)`
-              : "—"}
+            ${addCrewDay !== null ? `<b>인원 +${fmtNum(addCrewDay, 0)}명</b> 필요 (총 ${fmtNum(Math.ceil(crewNeededDay), 0)}명)` : "—"}
           </td>
         </tr>
 
@@ -1605,10 +1584,10 @@ function renderDurationCalcView(d) {
     : `${fmtNum(ratio * 100, 1)}%`;
 
   const meta = mdInfo.meta || getWorkTypeMeta("general");
-  const qtyLabel =
-    meta.key !== "general" ? `${meta.label} · 물량` : "총 작업량(인일)";
-
+  const qtyLabel = meta.key !== "general" ? `${meta.label} · 물량` : "총 작업량(인일)";
   const qtyUnit = meta.key !== "general" ? meta.unit : "인일";
+
+  const isGeneral = meta.key === "general";
 
   const derivedMdText =
     manDays !== null && mdInfo.source === "quantity"
@@ -1630,9 +1609,7 @@ function renderDurationCalcView(d) {
           <tr><td>필요 작업일수</td><td class="right"><b>${workDaysNeeded !== null ? fmtNum(workDaysNeeded, 1) + " 일" : "—"}</b></td></tr>
           <tr><td>예상 공사기간(달력일)</td><td class="right"><b>${calendarDaysNeeded !== null ? fmtNum(calendarDaysNeeded, 0) + " 일" : "—"}</b></td></tr>
           ${
-            targetCal !== null && targetCal > 0
-              ? `<tr><td>목표 공사기간</td><td class="right"><b>${fmtNum(targetCal, 0)} 일</b></td></tr>`
-              : ""
+            targetCal !== null && targetCal > 0 ? `<tr><td>목표 공사기간</td><td class="right"><b>${fmtNum(targetCal, 0)} 일</b></td></tr>` : ""
           }
           ${altHtml}
         </tbody>
@@ -1659,11 +1636,17 @@ function renderDurationCalcView(d) {
         style="width:180px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
       <span class="muted">${esc(qtyUnit)}</span>
 
-      <div class="muted" style="margin-left:6px;">(또는 인일 직접입력)</div>
-      <input type="number" data-duration-field="manDays" value="${esc(durationCalcState.manDays)}"
-        placeholder="인일(예: 4000)"
-        style="width:170px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
-      <span class="muted">인일</span>
+      ${
+        isGeneral
+          ? ""
+          : `
+            <div class="muted" style="margin-left:6px;">(또는 인일 직접입력)</div>
+            <input type="number" data-duration-field="manDays" value="${esc(durationCalcState.manDays)}"
+              placeholder="인일(예: 4000)"
+              style="width:170px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+            <span class="muted">인일</span>
+          `
+      }
     </div>
 
     <div style="margin-top:12px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
