@@ -95,20 +95,28 @@ let laborCalcState = {
   year: new Date().getFullYear(),
   role: "unskilled", // unskilled | skilled
   wageOverride: "", // (선택) 직접 입력 시 우선
+  premHigh: false,
+  premElectrical: false,
+  premDayNight: false,
+  premEquip: false,
 
-  // ✅ 작업량 입력을 자재비 계산처럼 '한 번에' 입력 (테이블)
-  // - workMode: "multi" 고정 사용
-  workMode: "multi", // multi | (legacy) mandays | panelCleaning | rebarTon | concreteM3 | formworkM2 | pvMw
+  // ✅ 작업량 입력
+  // - workMode: 작업량을 어떤 지표로 입력할지
+  //   * mandays: 총 인일 직접 입력
+  //   * panelCleaning: 패널 세척 면적(m²) 입력 → 내부 생산성으로 인일 환산
+  //   * rebarTon: 철근 물량(t) → 내부 생산성으로 인일 환산
+  //   * concreteM3: 콘크리트 물량(m³) → 내부 생산성으로 인일 환산
+  //   * formworkM2: 거푸집 물량(m²) → 내부 생산성으로 인일 환산
+  //   * pvMw: 태양광 설치용량(MW) → 내부 생산성으로 인일 환산
+  workMode: "mandays", // mandays | panelCleaning | rebarTon | concreteM3 | formworkM2 | pvMw
+  totalManDays: "", // 총 인일(직접 입력)
+  workQty: "", // 물량 입력(단위는 workMode에 따라 달라짐)
+  panelAreaM2: "", // (호환) 과거 필드
 
-  // ✅ 공종별 입력(수량) + 공종별 프리미엄(체크)
-  workRows: {
-    mandays: { qty: "", premHigh: false, premElectrical: false, premDayNight: false, premEquip: false },
-    panelCleaning: { qty: "", premHigh: false, premElectrical: false, premDayNight: false, premEquip: false },
-    rebarTon: { qty: "", premHigh: false, premElectrical: false, premDayNight: false, premEquip: false },
-    concreteM3: { qty: "", premHigh: false, premElectrical: false, premDayNight: false, premEquip: false },
-    formworkM2: { qty: "", premHigh: false, premElectrical: false, premDayNight: false, premEquip: false },
-    pvMw: { qty: "", premHigh: false, premElectrical: false, premDayNight: false, premEquip: false },
-  },
+  // ✅ 공기(기간) 계산용 입력(인건비 계산에서도 동일 로직 사용)
+  crew: "", // 투입 인원(명)
+  shiftMode: "day", // day | daynight
+  targetCalendarDays: "", // 목표 공사기간(달력일)
 
   robotUse: false,
 
@@ -118,18 +126,6 @@ let laborCalcState = {
   replaceRate: "30", // r (%)
   replaceManDaysPerRobotDay: "10", // 로봇 대체(인일/대·일)
   robots: "1", // 로봇 대수
-
-  // ========== (LEGACY 호환 필드: 기존 계산식/상태 유지) ==========
-  premHigh: false,
-  premElectrical: false,
-  premDayNight: false,
-  premEquip: false,
-  totalManDays: "",
-  workQty: "",
-  panelAreaM2: "",
-  crew: "",
-  shiftMode: "day",
-  targetCalendarDays: "",
 };
 
 // ✅ 작업유형별 내부 생산성(UI에는 노출하지 않음)
@@ -239,24 +235,6 @@ function pick(obj, keys, fallback = "") {
   return fallback;
 }
 
-
-
-// ✅ 점(.) 표기 데이터-필드 지원 (기존 방식 유지)
-function setByPath(obj, path, value) {
-  if (!obj || !path) return;
-  if (!String(path).includes('.')) {
-    obj[path] = value;
-    return;
-  }
-  const parts = String(path).split('.').filter(Boolean);
-  let cur = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    const k = parts[i];
-    if (typeof cur[k] !== 'object' || cur[k] === null) cur[k] = {};
-    cur = cur[k];
-  }
-  cur[parts[parts.length - 1]] = value;
-}
 function toNum(v) {
   const n = Number(String(v ?? "").replaceAll(",", "").trim());
   return Number.isFinite(n) ? n : null;
@@ -961,8 +939,8 @@ const LABOR_PREM = {
 
 function computeLaborCalc(d) {
   const y = Number(laborCalcState.year) || getLatestLaborYear(d) || new Date().getFullYear();
-  // ✅ 직종(숙련/비숙련) 선택 UI 제거: 기본은 비숙련 기준으로 산정
-  const wageRole = "unskilled";
+  const wageRole = laborCalcState.role === "skilled" ? "skilled" : "unskilled";
+  const workMode = laborCalcState.workMode || "mandays";
 
   const base = (() => {
     const ov = toNum(laborCalcState.wageOverride);
@@ -970,159 +948,7 @@ function computeLaborCalc(d) {
     return getLaborWageByYear(d, wageRole, y);
   })();
 
-  // =====================
-  // ✅ NEW: 멀티 입력(자재비 계산처럼)
-  // =====================
-  if ((laborCalcState.workMode || "multi") === "multi") {
-    const rowsDef = [
-      { key: "mandays", label: "총 인일", unit: "인일", prod: null },
-      { key: "panelCleaning", label: "패널 세척", unit: "m²", prod: PRODUCTIVITY.panelCleaningM2PerManDay },
-      { key: "rebarTon", label: "철근", unit: "t", prod: PRODUCTIVITY.rebarTonPerManDay },
-      { key: "concreteM3", label: "콘크리트", unit: "m³", prod: PRODUCTIVITY.concreteM3PerManDay },
-      { key: "formworkM2", label: "거푸집", unit: "m²", prod: PRODUCTIVITY.formworkM2PerManDay },
-      { key: "pvMw", label: "태양광 설치", unit: "MW", prod: PRODUCTIVITY.pvMwPerManDay },
-    ];
-
-    const workRows = laborCalcState.workRows || {};
-
-    const getPrem = (rowKey) => {
-      const r = workRows?.[rowKey] || {};
-      const prem =
-        (r.premHigh ? LABOR_PREM.high : 1) *
-        (r.premElectrical ? LABOR_PREM.electrical : 1) *
-        (r.premDayNight ? LABOR_PREM.daynight : 1) *
-        (r.premEquip ? LABOR_PREM.equip : 1);
-      return prem;
-    };
-
-    const calcRow = (def) => {
-      const st = workRows?.[def.key] || {};
-      const qty = toNum(st.qty);
-      if (qty === null || qty <= 0) {
-        return {
-          key: def.key,
-          label: def.label,
-          unit: def.unit,
-          qty: qty,
-          prem: getPrem(def.key),
-          manDays: null,
-          wage: base,
-          cost: null,
-        };
-      }
-
-      const manDays = def.prod ? qty / def.prod : qty;
-      const prem = getPrem(def.key);
-      const effWage = base !== null ? base * prem : null;
-      const cost = effWage !== null && manDays !== null ? effWage * manDays : null;
-
-      return {
-        key: def.key,
-        label: def.label,
-        unit: def.unit,
-        qty,
-        prem,
-        manDays,
-        wage: effWage,
-        cost,
-      };
-    };
-
-    const rows = rowsDef.map(calcRow);
-
-    const totalManDays = rows.reduce((acc, r) => acc + (Number.isFinite(r.manDays) ? r.manDays : 0), 0) || null;
-    const laborCostNoRobot = rows.reduce((acc, r) => acc + (Number.isFinite(r.cost) ? r.cost : 0), 0) || null;
-
-    const { ratio: workRatio, detail: ratioDetail } = computeWorkabilityRatio(d, y);
-
-    // ✅ R/F 기본값 보정
-    const robotDailyCandidate = toNum(laborCalcState.robotDailyUsd);
-    const robotDailyDefault =
-      robotDailyCandidate !== null && robotDailyCandidate > 0 ? robotDailyCandidate : getRobotDailyUsdDefault(d);
-
-    const fixedCandidate = toNum(laborCalcState.fixedCostUsd);
-    const fixedCostUsd =
-      fixedCandidate !== null && fixedCandidate >= 0 ? fixedCandidate : getRobotFixedCostDefault(d);
-
-    if (!laborCalcState.robotUse) {
-      return {
-        year: y,
-        mode: "multi",
-        rows,
-        baseWage: base,
-        totalManDays,
-        laborCostNoRobot,
-        duration: { workRatio, ratioDetail },
-        robot: null,
-      };
-    }
-
-    // ✅ 로봇(세척) 적용: 총 인일 기준(프리미엄 분포는 평균단가로 반영)
-    const replaceRate = Math.min(100, Math.max(0, toNum(laborCalcState.replaceRate) ?? 0));
-    const replaceManDays = totalManDays !== null ? totalManDays * (replaceRate / 100) : null;
-
-    const robotsCandidate = toNum(laborCalcState.robots);
-    const robots = Math.max(1, Math.floor(robotsCandidate !== null && robotsCandidate > 0 ? robotsCandidate : 1));
-
-    const mdCandidate = toNum(laborCalcState.replaceManDaysPerRobotDay);
-    const mdPerRobotDay =
-      mdCandidate !== null && mdCandidate > 0 ? mdCandidate : getRobotReplaceManDaysPerRobotDayDefault();
-
-    const robotTotalDays = replaceManDays !== null ? replaceManDays / mdPerRobotDay : null;
-    const robotFleetCalendarDays = robotTotalDays !== null ? robotTotalDays / robots : null;
-
-    const remainManDays =
-      totalManDays !== null && replaceManDays !== null ? Math.max(0, totalManDays - replaceManDays) : null;
-
-    // 평균단가로 남은 인건비 추정
-    const avgWage =
-      totalManDays !== null && laborCostNoRobot !== null && totalManDays > 0 ? laborCostNoRobot / totalManDays : null;
-
-    const laborCostWithRobot = avgWage !== null && remainManDays !== null ? avgWage * remainManDays : null;
-
-    const robotCost = robotTotalDays !== null ? robotTotalDays * robotDailyDefault : null;
-
-    const totalCostWithRobot =
-      laborCostWithRobot !== null && robotCost !== null ? laborCostWithRobot + robotCost + fixedCostUsd : null;
-
-    const saving =
-      laborCostNoRobot !== null && totalCostWithRobot !== null ? laborCostNoRobot - totalCostWithRobot : null;
-
-    const savingRate =
-      saving !== null && laborCostNoRobot !== null && laborCostNoRobot > 0 ? saving / laborCostNoRobot : null;
-
-    return {
-      year: y,
-      mode: "multi",
-      rows,
-      baseWage: base,
-      totalManDays,
-      laborCostNoRobot,
-      duration: { workRatio, ratioDetail },
-      robot: {
-        robotDailyUsd: robotDailyDefault,
-        fixedCostUsd,
-        replaceRate,
-        replaceManDays,
-        mdPerRobotDay,
-        robots,
-        robotTotalDays,
-        robotFleetCalendarDays,
-        remainManDays,
-        laborCostWithRobot,
-        robotCost,
-        totalCostWithRobot,
-        saving,
-        savingRate,
-      },
-    };
-  }
-
-  // =====================
-  // ✅ LEGACY: 단일 입력(기존)
-  // =====================
-  const workMode = laborCalcState.workMode || "mandays";
-
+  // ✅ 총 인일(직접 입력 or 물량 → 생산성(내부) 기반 환산)
   const workMeta = getWorkModeMeta(workMode);
   const workQty = workMode === "mandays" ? null : toNum(laborCalcState.workQty);
 
@@ -1135,6 +961,7 @@ function computeLaborCalc(d) {
     return workQty / prod;
   })();
 
+  // ✅ 작업량 정보(표시/CSV 등에 활용 가능)
   const work = {
     mode: workMode,
     label: workMode === "mandays" ? "총 인일" : workMeta.label,
@@ -1153,12 +980,28 @@ function computeLaborCalc(d) {
   const effectiveWage = base !== null ? base * prem : null;
   const laborCostNoRobot = effectiveWage !== null && totalManDays !== null ? effectiveWage * totalManDays : null;
 
-  const { ratio: workRatio, detail: ratioDetail } = computeWorkabilityRatio(d, y);
+  // ✅ 공사기간(옵션) : duration 탭과 동일 로직을 인건비 계산에도 적용
+  const crewNum = toNum(laborCalcState.crew);
+  const crew = crewNum !== null && crewNum > 0 ? crewNum : null;
+  const shiftMode = laborCalcState.shiftMode || "day";
+  const shiftM = getShiftMultiplier(shiftMode);
 
+  const { ratio: workRatio, detail: ratioDetail } = computeWorkabilityRatio(d, y);
+  const workDaysNeeded = totalManDays !== null && crew !== null ? totalManDays / (crew * shiftM) : null;
+  const calendarDaysNeeded = workDaysNeeded !== null ? workDaysNeeded / workRatio : null;
+
+  const targetCal = toNum(laborCalcState.targetCalendarDays);
+  const crewNeededDay =
+    totalManDays !== null && targetCal !== null && targetCal > 0 ? totalManDays / (targetCal * workRatio * 1.0) : null;
+  const crewNeededDayNight =
+    totalManDays !== null && targetCal !== null && targetCal > 0 ? totalManDays / (targetCal * workRatio * 1.6) : null;
+
+  // ✅ R 기본값(500) + 입력 보정
   const robotDailyCandidate = toNum(laborCalcState.robotDailyUsd);
   const robotDailyDefault =
     robotDailyCandidate !== null && robotDailyCandidate > 0 ? robotDailyCandidate : getRobotDailyUsdDefault(d);
 
+  // ✅ F 기본값(10000) + 입력 보정
   const fixedCandidate = toNum(laborCalcState.fixedCostUsd);
   const fixedCostUsd = fixedCandidate !== null && fixedCandidate >= 0 ? fixedCandidate : getRobotFixedCostDefault(d);
 
@@ -1172,13 +1015,33 @@ function computeLaborCalc(d) {
       totalManDays,
       laborCostNoRobot,
       workMode,
-      duration: { workRatio, ratioDetail },
+      duration: {
+        workRatio,
+        ratioDetail,
+        crew,
+        shiftMode,
+        shiftM,
+        workDaysNeeded,
+        calendarDaysNeeded,
+        targetCal,
+        crewNeededDay,
+        crewNeededDayNight,
+      },
       robot: null,
     };
   }
 
   const replaceRate = Math.min(100, Math.max(0, toNum(laborCalcState.replaceRate) ?? 0));
-  const replaceManDays = totalManDays !== null ? totalManDays * (replaceRate / 100) : null;
+
+  // ✅ 로봇 비용/대체효과는 "패널 세척(panelCleaning)"에만 적용
+  // - 다른 작업모드에서는 로봇 사용 체크를 해도 로봇비용=0, 대체인일=0으로 처리
+  const robotApplicable = workMode === "panelCleaning";
+  const replaceManDays =
+    totalManDays !== null
+      ? robotApplicable
+        ? totalManDays * (replaceRate / 100)
+        : 0
+      : null;
 
   const robotsCandidate = toNum(laborCalcState.robots);
   const robots = Math.max(1, Math.floor(robotsCandidate !== null && robotsCandidate > 0 ? robotsCandidate : 1));
@@ -1196,8 +1059,16 @@ function computeLaborCalc(d) {
 
   const robotCost = robotTotalDays !== null ? robotTotalDays * robotDailyDefault : null;
 
-  const totalCostWithRobot = laborCostWithRobot !== null && robotCost !== null ? laborCostWithRobot + robotCost + fixedCostUsd : null;
+  // ✅ 고정비도 세척에만 반영
+  const fixedCostApplied = robotApplicable ? fixedCostUsd : 0;
 
+  // ✅ 총비용에 고정비 포함
+  const totalCostWithRobot =
+    laborCostWithRobot !== null && robotCost !== null
+      ? laborCostWithRobot + robotCost + fixedCostApplied
+      : null;
+
+  // ✅ Saving = (로봇 미사용 인건비) - (로봇 사용 총비용)
   const saving = laborCostNoRobot !== null && totalCostWithRobot !== null ? laborCostNoRobot - totalCostWithRobot : null;
 
   const savingRate = saving !== null && laborCostNoRobot !== null && laborCostNoRobot > 0 ? saving / laborCostNoRobot : null;
@@ -1211,10 +1082,23 @@ function computeLaborCalc(d) {
     totalManDays,
     laborCostNoRobot,
     workMode,
-    duration: { workRatio, ratioDetail },
+    duration: {
+      workRatio,
+      ratioDetail,
+      crew,
+      shiftMode,
+      shiftM,
+      workDaysNeeded,
+      calendarDaysNeeded,
+      targetCal,
+      crewNeededDay,
+      crewNeededDayNight,
+    },
     robot: {
       robotDailyUsd: robotDailyDefault,
       fixedCostUsd,
+      robotApplicable,
+      fixedCostApplied,
       replaceRate,
       replaceManDays,
       mdPerRobotDay,
@@ -1240,74 +1124,14 @@ function renderLaborCalcView(d) {
   const unit = esc(d?.laborAnnual?.unit || "USD/day");
   const res = computeLaborCalc(d);
 
-  // ✅ 멀티 입력 테이블(자재비 계산 스타일)
-  const rowsDef = [
-    { key: "mandays", label: "총 인일", unit: "인일" },
-    { key: "panelCleaning", label: "패널 세척", unit: "m²" },
-    { key: "rebarTon", label: "철근", unit: "t" },
-    { key: "concreteM3", label: "콘크리트", unit: "m³" },
-    { key: "formworkM2", label: "거푸집", unit: "m²" },
-    { key: "pvMw", label: "태양광 설치", unit: "MW" },
-  ];
+  const appliedWageText = res.effectiveWage !== null ? `${fmtNum(res.effectiveWage, 2)} ${unit}` : "—";
 
-  const getRowState = (k) => laborCalcState?.workRows?.[k] || {};
+  const premText = res.baseWage !== null ? `적용 일급: ${fmtNum(res.baseWage, 2)} × ${fmtNum(res.prem, 3)}` : `적용 일급: —`;
 
-  const mkPremChecks = (k) => {
-    const r = getRowState(k);
-    const base = `data-labor-field="workRows.${k}.`;
-    // 프리미엄은 '공종별'로 선택
-    return `
-      <label style="display:flex; align-items:center; gap:6px;">
-        <input type="checkbox" ${base}premHigh" ${r.premHigh ? "checked" : ""}/>
-        <span class="muted">고소</span>
-      </label>
-      <label style="display:flex; align-items:center; gap:6px;">
-        <input type="checkbox" ${base}premElectrical" ${r.premElectrical ? "checked" : ""}/>
-        <span class="muted">전기</span>
-      </label>
-      <label style="display:flex; align-items:center; gap:6px;">
-        <input type="checkbox" ${base}premDayNight" ${r.premDayNight ? "checked" : ""}/>
-        <span class="muted">주야</span>
-      </label>
-      <label style="display:flex; align-items:center; gap:6px;">
-        <input type="checkbox" ${base}premEquip" ${r.premEquip ? "checked" : ""}/>
-        <span class="muted">장비</span>
-      </label>
-    `;
-  };
-
-  const rowsHtml = rowsDef
-    .map((it) => {
-      const st = getRowState(it.key);
-      const qtyVal = st.qty ?? "";
-
-      // 결과에서 환산 인일 표기
-      const found = (res?.rows || []).find((r) => r.key === it.key);
-      const mdText = found?.manDays !== null && found?.manDays !== undefined ? fmtNum(found.manDays, 1) : "—";
-
-      return `
-        <tr>
-          <td style="font-weight:700;">${esc(it.label)}</td>
-          <td class="right">
-            <input type="number" min="0" step="0.01" data-labor-field="workRows.${esc(it.key)}.qty" value="${esc(qtyVal)}"
-              placeholder="0"
-              style="width:140px; padding:8px 10px; border:1px solid #e5e7eb; border-radius:12px; text-align:right;" />
-            <span class="muted" style="margin-left:6px;">${esc(it.unit)}</span>
-          </td>
-          <td class="right"><b>${esc(mdText)}</b> <span class="muted">인일</span></td>
-          <td>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-              ${mkPremChecks(it.key)}
-            </div>
-          </td>
-        </tr>
-      `;
-    })
-    .join("");
-
-  // ✅ 로봇 블록(필요 시만 표시)
   const robotBlock = (() => {
-    if (!laborCalcState.robotUse) return "";
+    const rc = res.robot;
+    if (!rc) return "";
+
     return `
       <div style="margin-top:12px; border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
         <div style="font-weight:900;">세척로봇 투입</div>
@@ -1353,28 +1177,52 @@ function renderLaborCalcView(d) {
     `;
   })();
 
-  // ✅ 결과: 작업가능비율 → 인건비(간결)
-  const ratio = res?.duration?.workRatio;
-  const ratioText = typeof ratio === "number" ? fmtNum(ratio * 100, 1) + "%" : "—";
-
-  // ✅ 결과는 사용자가 보고 싶은 값만 노출
-  // 작업가능비율, 인건비, 로봇 비용, 총비용, 절감액, 절감률
   const resultRows = (() => {
     const r = res.robot;
-
-    const laborCost = r ? r.laborCostWithRobot : res.laborCostNoRobot;
-    const robotCostTotal = r ? (Number(r.robotCost || 0) + Number(r.fixedCostUsd || 0)) : 0;
-    const totalCost = r ? r.totalCostWithRobot : res.laborCostNoRobot;
-    const saving = r ? r.saving : 0;
-    const savingRate = r ? r.savingRate : 0;
+    if (!r) {
+      return `
+        <tr><td>인건비(세척로봇 미사용)</td><td class="right"><b>${res.laborCostNoRobot !== null ? fmtNum(res.laborCostNoRobot, 2) + " USD" : "—"}</b></td></tr>
+      `;
+    }
 
     return `
-      <tr><td><b>작업가능비율</b></td><td class="right"><b>${esc(ratioText)}</b></td></tr>
-      <tr><td><b>인건비</b></td><td class="right"><b>${laborCost !== null && laborCost !== undefined ? fmtNum(laborCost, 2) + " USD" : "—"}</b></td></tr>
-      <tr><td><b>로봇 비용</b></td><td class="right"><b>${robotCostTotal !== null && robotCostTotal !== undefined ? fmtNum(robotCostTotal, 2) + " USD" : "—"}</b></td></tr>
-      <tr><td><b>총비용</b></td><td class="right"><b>${totalCost !== null && totalCost !== undefined ? fmtNum(totalCost, 2) + " USD" : "—"}</b></td></tr>
-      <tr><td><b>절감액</b></td><td class="right"><b>${saving !== null && saving !== undefined ? fmtNum(saving, 2) + " USD" : "—"}</b></td></tr>
-      <tr><td><b>절감률</b></td><td class="right"><b>${savingRate !== null && savingRate !== undefined ? fmtNum(savingRate * 100, 1) + "%" : "—"}</b></td></tr>
+      <tr><td>인건비(세척로봇 미사용)</td><td class="right"><b>${res.laborCostNoRobot !== null ? fmtNum(res.laborCostNoRobot, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td>로봇 대체 인일</td><td class="right"><b>${r.replaceManDays !== null ? fmtNum(r.replaceManDays, 1) + " 인일" : "—"}</b></td></tr>
+      <tr><td>로봇 필요 대수·일(총)</td><td class="right"><b>${r.robotTotalDays !== null ? fmtNum(r.robotTotalDays, 1) + " 대·일" : "—"}</b></td></tr>
+      <tr><td>로봇 운영기간(대수 고려)</td><td class="right"><b>${r.robotFleetCalendarDays !== null ? fmtNum(r.robotFleetCalendarDays, 1) + " 일" : "—"}</b></td></tr>
+      <tr><td>인건비(세척로봇 적용 후)</td><td class="right"><b>${r.laborCostWithRobot !== null ? fmtNum(r.laborCostWithRobot, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td>로봇 비용</td><td class="right"><b>${r.robotCost !== null ? fmtNum(r.robotCost, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td>고정비(F)</td><td class="right"><b>${fmtNum(r.fixedCostUsd, 0)} USD</b></td></tr>
+      <tr><td><b>총비용(인건비+로봇+고정비)</b></td><td class="right"><b>${r.totalCostWithRobot !== null ? fmtNum(r.totalCostWithRobot, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td><b>절감액</b></td><td class="right"><b>${r.saving !== null ? fmtNum(r.saving, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td><b>절감률</b></td><td class="right"><b>${r.savingRate !== null ? fmtNum(r.savingRate * 100, 1) + "%" : "—"}</b></td></tr>
+    `;
+  })();
+
+  const durationRows = (() => {
+    const du = res.duration || {};
+    const ratio = du.workRatio;
+    const ratioText = typeof ratio === "number" ? fmtNum(ratio * 100, 1) + "%" : "—";
+    const workDays = du.workDaysNeeded;
+    const calDays = du.calendarDaysNeeded;
+    const target = du.targetCal;
+    const crewDay = du.crewNeededDay;
+    const crewDN = du.crewNeededDayNight;
+
+    const targetRows =
+      typeof target === "number" && target > 0
+        ? `
+          <tr><td>목표 공사기간</td><td class="right"><b>${fmtNum(target, 0)} 일</b></td></tr>
+          <tr><td>필요 인원(주간 기준)</td><td class="right"><b>${crewDay !== null && crewDay !== undefined ? fmtNum(Math.ceil(crewDay), 0) + " 명" : "—"}</b></td></tr>
+          <tr><td>필요 인원(주야간 기준)</td><td class="right"><b>${crewDN !== null && crewDN !== undefined ? fmtNum(Math.ceil(crewDN), 0) + " 명" : "—"}</b></td></tr>
+        `
+        : "";
+
+    return `
+      <tr><td>작업가능비율</td><td class="right"><b>${esc(ratioText)}</b></td></tr>
+      <tr><td>필요 작업일수</td><td class="right"><b>${workDays !== null && workDays !== undefined ? fmtNum(workDays, 1) + " 일" : "—"}</b></td></tr>
+      <tr><td>예상 공사기간(달력일)</td><td class="right"><b>${calDays !== null && calDays !== undefined ? fmtNum(calDays, 0) + " 일" : "—"}</b></td></tr>
+      ${targetRows}
     `;
   })();
 
@@ -1388,36 +1236,119 @@ function renderLaborCalcView(d) {
           .join("")}
       </select>
 
+      <div style="font-weight:900;">직종</div>
+      <select data-labor-field="role"
+        style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+        <option value="unskilled" ${laborCalcState.role === "unskilled" ? "selected" : ""}>일반공(비숙련)</option>
+        <option value="skilled" ${laborCalcState.role === "skilled" ? "selected" : ""}>숙련공</option>
+      </select>
+
       <div style="font-weight:900;">일급(선택)</div>
       <input type="number" min="0" step="0.1" data-labor-field="wageOverride" value="${esc(laborCalcState.wageOverride)}"
         placeholder="자동 불러오기"
         style="width:150px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
       <span class="muted">${unit}</span>
-
-      <label style="display:flex; align-items:center; gap:8px; margin-left:auto; font-weight:900;">
-        <input type="checkbox" data-labor-field="robotUse" ${laborCalcState.robotUse ? "checked" : ""}/>
-        세척로봇 사용
-      </label>
     </div>
 
-    <div style="margin-top:12px;">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>작업</th>
-            <th class="right">입력</th>
-            <th class="right">환산 인일</th>
-            <th>프리미엄(공종별)</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowsHtml}
-        </tbody>
-      </table>
+    <div style="margin-top:10px;" class="muted">${esc(premText)} → <b>${esc(appliedWageText)}</b></div>
 
+    <div style="margin-top:12px; border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
+      <div style="font-weight:900;">프리미엄</div>
+      <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" data-labor-field="premHigh" ${laborCalcState.premHigh ? "checked" : ""}/>
+          고소작업
+        </label>
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" data-labor-field="premElectrical" ${laborCalcState.premElectrical ? "checked" : ""}/>
+          전기설비 근접
+        </label>
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" data-labor-field="premDayNight" ${laborCalcState.premDayNight ? "checked" : ""}/>
+          주야간
+        </label>
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" data-labor-field="premEquip" ${laborCalcState.premEquip ? "checked" : ""}/>
+          장비 포함
+        </label>
+      </div>
     </div>
 
-    ${robotBlock}
+    <div style="margin-top:12px; border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
+      <div style="font-weight:900;">작업량 입력</div>
+
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+        <span class="muted">기준</span>
+        <select data-labor-field="workMode"
+          style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+          <option value="mandays" ${laborCalcState.workMode === "mandays" ? "selected" : ""}>총 인일</option>
+          <option value="panelCleaning" ${laborCalcState.workMode === "panelCleaning" ? "selected" : ""}>패널 세척(m²)</option>
+          <option value="rebarTon" ${laborCalcState.workMode === "rebarTon" ? "selected" : ""}>철근(t)</option>
+          <option value="concreteM3" ${laborCalcState.workMode === "concreteM3" ? "selected" : ""}>콘크리트(m³)</option>
+          <option value="formworkM2" ${laborCalcState.workMode === "formworkM2" ? "selected" : ""}>거푸집(m²)</option>
+          <option value="pvMw" ${laborCalcState.workMode === "pvMw" ? "selected" : ""}>태양광 설치(MW)</option>
+        </select>
+
+        ${laborCalcState.workMode === "mandays"
+          ? `
+            <input type="number" min="0" step="0.1" data-labor-field="totalManDays" value="${esc(laborCalcState.totalManDays)}"
+              placeholder="총 인일(예: 4000)"
+              style="width:200px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+            <span class="muted">인일</span>
+          `
+          : `
+            <input type="number" min="0" step="1" data-labor-field="workQty" value="${esc(laborCalcState.workQty || laborCalcState.panelAreaM2)}"
+              placeholder="물량 입력"
+              style="width:220px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+            <span class="muted">${esc(getWorkModeMeta(laborCalcState.workMode || "panelCleaning")?.unit || "")}</span>
+            <span class="muted" style="margin-left:auto;">환산 인일: <b>${res.totalManDays !== null ? fmtNum(res.totalManDays, 1) : "—"}</b> 인일</span>
+          `}
+      </div>
+      <div class="muted" style="margin-top:6px;">
+        (생산성은 내부 기본값으로 자동 환산됩니다)
+      </div>
+    </div>
+
+    <div style="margin-top:12px; border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
+      <div style="font-weight:900;">공사기간(옵션)</div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <span class="muted">투입 인원</span>
+          <input type="number" min="1" step="1" data-labor-field="crew" value="${esc(laborCalcState.crew)}"
+            placeholder="(예: 40)"
+            style="width:120px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+          <span class="muted">명</span>
+        </label>
+
+        <label style="display:flex; align-items:center; gap:8px;">
+          <span class="muted">작업 방식</span>
+          <select data-labor-field="shiftMode"
+            style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+            <option value="day" ${laborCalcState.shiftMode === "day" ? "selected" : ""}>주간</option>
+            <option value="daynight" ${laborCalcState.shiftMode === "daynight" ? "selected" : ""}>주야간</option>
+          </select>
+        </label>
+
+        <label style="display:flex; align-items:center; gap:8px;">
+          <span class="muted">목표기간</span>
+          <input type="number" min="1" step="1" data-labor-field="targetCalendarDays" value="${esc(laborCalcState.targetCalendarDays)}"
+            placeholder="(예: 180)"
+            style="width:140px; padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; text-align:right;" />
+          <span class="muted">일</span>
+        </label>
+      </div>
+    </div>
+
+    <div style="margin-top:12px; border:1px solid #e5e7eb; border-radius:14px; padding:12px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:900;">
+          <input type="checkbox" data-labor-field="robotUse" ${laborCalcState.robotUse ? "checked" : ""}/>
+          세척로봇 사용
+        </label>
+      </div>
+      ${laborCalcState.robotUse ? robotBlock : ""}
+    </div>
+
 
     <div style="margin-top:14px;">
       <div style="font-weight:900; margin-bottom:8px;">결과</div>
@@ -1425,6 +1356,7 @@ function renderLaborCalcView(d) {
         <thead><tr><th>항목</th><th class="right">값</th></tr></thead>
         <tbody>
           ${resultRows}
+          ${durationRows}
         </tbody>
       </table>
     </div>
@@ -2080,7 +2012,7 @@ async function init() {
       // laborcalc fields (select/checkbox)
       const lf = t?.getAttribute?.("data-labor-field");
       if (lf) {
-        setByPath(laborCalcState, lf, t.type === "checkbox" ? t.checked : t.value);
+        laborCalcState[lf] = t.type === "checkbox" ? t.checked : t.value;
 
         renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
         return;
@@ -2118,7 +2050,7 @@ async function init() {
       // laborcalc fields (input) ✅ 디바운스 렌더링
       const lf = t?.getAttribute?.("data-labor-field");
       if (lf) {
-        setByPath(laborCalcState, lf, t.value);
+        laborCalcState[lf] = t.value;
         scheduleRerender();
         return;
       }
