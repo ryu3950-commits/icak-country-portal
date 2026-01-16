@@ -961,7 +961,8 @@ const LABOR_PREM = {
 
 function computeLaborCalc(d) {
   const y = Number(laborCalcState.year) || getLatestLaborYear(d) || new Date().getFullYear();
-  const wageRole = laborCalcState.role === "skilled" ? "skilled" : "unskilled";
+  // ✅ 직종(숙련/비숙련) 선택 UI 제거: 기본은 비숙련 기준으로 산정
+  const wageRole = "unskilled";
 
   const base = (() => {
     const ov = toNum(laborCalcState.wageOverride);
@@ -1356,26 +1357,24 @@ function renderLaborCalcView(d) {
   const ratio = res?.duration?.workRatio;
   const ratioText = typeof ratio === "number" ? fmtNum(ratio * 100, 1) + "%" : "—";
 
+  // ✅ 결과는 사용자가 보고 싶은 값만 노출
+  // 작업가능비율, 인건비, 로봇 비용, 총비용, 절감액, 절감률
   const resultRows = (() => {
     const r = res.robot;
-    if (!r) {
-      return `
-        <tr><td><b>작업가능비율</b></td><td class="right"><b>${esc(ratioText)}</b></td></tr>
-        <tr><td>총 인일</td><td class="right"><b>${res.totalManDays !== null && res.totalManDays !== undefined ? fmtNum(res.totalManDays, 1) + " 인일" : "—"}</b></td></tr>
-        <tr><td><b>인건비(로봇 미사용)</b></td><td class="right"><b>${res.laborCostNoRobot !== null && res.laborCostNoRobot !== undefined ? fmtNum(res.laborCostNoRobot, 2) + " USD" : "—"}</b></td></tr>
-      `;
-    }
+
+    const laborCost = r ? r.laborCostWithRobot : res.laborCostNoRobot;
+    const robotCostTotal = r ? (Number(r.robotCost || 0) + Number(r.fixedCostUsd || 0)) : 0;
+    const totalCost = r ? r.totalCostWithRobot : res.laborCostNoRobot;
+    const saving = r ? r.saving : 0;
+    const savingRate = r ? r.savingRate : 0;
 
     return `
       <tr><td><b>작업가능비율</b></td><td class="right"><b>${esc(ratioText)}</b></td></tr>
-      <tr><td>총 인일</td><td class="right"><b>${res.totalManDays !== null && res.totalManDays !== undefined ? fmtNum(res.totalManDays, 1) + " 인일" : "—"}</b></td></tr>
-      <tr><td>인건비(로봇 미사용)</td><td class="right"><b>${res.laborCostNoRobot !== null ? fmtNum(res.laborCostNoRobot, 2) + " USD" : "—"}</b></td></tr>
-      <tr><td>로봇 대체 인일</td><td class="right"><b>${r.replaceManDays !== null ? fmtNum(r.replaceManDays, 1) + " 인일" : "—"}</b></td></tr>
-      <tr><td>로봇 비용</td><td class="right"><b>${r.robotCost !== null ? fmtNum(r.robotCost, 2) + " USD" : "—"}</b></td></tr>
-      <tr><td>고정비(F)</td><td class="right"><b>${fmtNum(r.fixedCostUsd, 0)} USD</b></td></tr>
-      <tr><td><b>총비용(인건비+로봇+고정비)</b></td><td class="right"><b>${r.totalCostWithRobot !== null ? fmtNum(r.totalCostWithRobot, 2) + " USD" : "—"}</b></td></tr>
-      <tr><td><b>절감액</b></td><td class="right"><b>${r.saving !== null ? fmtNum(r.saving, 2) + " USD" : "—"}</b></td></tr>
-      <tr><td><b>절감률</b></td><td class="right"><b>${r.savingRate !== null ? fmtNum(r.savingRate * 100, 1) + "%" : "—"}</b></td></tr>
+      <tr><td><b>인건비</b></td><td class="right"><b>${laborCost !== null && laborCost !== undefined ? fmtNum(laborCost, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td><b>로봇 비용</b></td><td class="right"><b>${robotCostTotal !== null && robotCostTotal !== undefined ? fmtNum(robotCostTotal, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td><b>총비용</b></td><td class="right"><b>${totalCost !== null && totalCost !== undefined ? fmtNum(totalCost, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td><b>절감액</b></td><td class="right"><b>${saving !== null && saving !== undefined ? fmtNum(saving, 2) + " USD" : "—"}</b></td></tr>
+      <tr><td><b>절감률</b></td><td class="right"><b>${savingRate !== null && savingRate !== undefined ? fmtNum(savingRate * 100, 1) + "%" : "—"}</b></td></tr>
     `;
   })();
 
@@ -1387,13 +1386,6 @@ function renderLaborCalcView(d) {
         ${(years.length ? years : [defaultYear])
           .map((v) => `<option value="${v}" ${Number(laborCalcState.year) === v ? "selected" : ""}>${v}</option>`)
           .join("")}
-      </select>
-
-      <div style="font-weight:900;">직종</div>
-      <select data-labor-field="role"
-        style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
-        <option value="unskilled" ${laborCalcState.role === "unskilled" ? "selected" : ""}>일반공(비숙련)</option>
-        <option value="skilled" ${laborCalcState.role === "skilled" ? "selected" : ""}>숙련공</option>
       </select>
 
       <div style="font-weight:900;">일급(선택)</div>
@@ -1422,7 +1414,7 @@ function renderLaborCalcView(d) {
           ${rowsHtml}
         </tbody>
       </table>
-      <div class="muted" style="margin-top:6px;">(생산성은 내부 기본값으로 자동 환산됩니다)</div>
+
     </div>
 
     ${robotBlock}
