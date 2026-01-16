@@ -62,6 +62,7 @@ let view = "costs"; // costs | matcalc | laborcalc | nonwork | duration
 
 // 자재비 계산 상태(분기/수량)
 let matCalcState = {
+  year: "",
   period: "",
   qty: {
     brent: "",
@@ -442,6 +443,31 @@ function getLatestPeriod(d) {
   return p.length ? p[p.length - 1] : "";
 }
 
+
+// ✅ materialsQuarterly 연도 목록(2024,2025...)
+function listAvailableMaterialYears(d) {
+  const periods = listAvailablePeriods(d);
+  const years = [...new Set(periods
+    .map(p => {
+      const m = String(p).match(PERIOD_RE);
+      return m ? Number(m[1]) : null;
+    })
+    .filter(v => Number.isFinite(v))
+  )].sort((a,b)=>a-b);
+  return years;
+}
+
+function getLatestMaterialYear(d) {
+  const ys = listAvailableMaterialYears(d);
+  return ys.length ? ys[ys.length-1] : null;
+}
+
+function listPeriodsOfYear(d, year) {
+  const y = Number(year);
+  if (!Number.isFinite(y)) return listAvailablePeriods(d);
+  return listAvailablePeriods(d).filter(p => String(p).startsWith(String(y) + 'Q'));
+}
+
 function getQuarterRow(d, period) {
   const mq = d?.materialsQuarterly?.series;
   if (!Array.isArray(mq) || !mq.length) return null;
@@ -648,25 +674,75 @@ function renderTabs() {
 
 function renderPeriodSelect(d) {
   const periods = listAvailablePeriods(d);
-  if (!matCalcState.period) matCalcState.period = getLatestPeriod(d);
-  if (periods.length && !periods.includes(matCalcState.period)) matCalcState.period = periods[periods.length - 1] || "";
+  const years = listAvailableMaterialYears(d);
 
-  const safePeriods = periods.length ? periods : matCalcState.period ? [matCalcState.period] : [];
+  // 연도 기본값 = 최신 연도
+  if (!matCalcState.year) {
+    const ly = getLatestMaterialYear(d);
+    matCalcState.year = ly ? String(ly) : "";
+  }
+  if (years.length) {
+    const yNum = Number(matCalcState.year);
+    if (!Number.isFinite(yNum) || !years.includes(yNum)) {
+      matCalcState.year = String(years[years.length - 1]);
+    }
+  }
+
+  const ySelNum = Number(matCalcState.year);
+  const yearPeriods = Number.isFinite(ySelNum) ? listPeriodsOfYear(d, ySelNum) : periods;
+
+  // 분기 기본값 = 선택 연도의 최신 분기
+  if (!matCalcState.period) {
+    matCalcState.period = yearPeriods.length ? yearPeriods[yearPeriods.length - 1] : getLatestPeriod(d);
+  }
+  if (yearPeriods.length && !yearPeriods.includes(matCalcState.period)) {
+    matCalcState.period = yearPeriods[yearPeriods.length - 1] || matCalcState.period;
+  }
+
+  // 연도 옵션
+  const yearOptions = years
+    .map((yy) => {
+      const sel = Number(matCalcState.year) === yy ? "selected" : "";
+      return `<option value="${yy}" ${sel}>${yy}</option>`;
+    })
+    .join("");
+
+  const yearSelect = years.length
+    ? `
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <div style="font-weight:900;">연도</div>
+        <select data-mat-field="year"
+          style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+          ${yearOptions}
+        </select>
+      </div>
+    `
+    : "";
+
+  // 분기 옵션(선택 연도에 해당하는 것만)
+  const safePeriods = yearPeriods.length ? yearPeriods : matCalcState.period ? [matCalcState.period] : [];
   const options = safePeriods
     .map((p) => {
       const sel = String(p) === String(matCalcState.period) ? "selected" : "";
-      return `<option value="${esc(p)}" ${sel}>${esc(p)}</option>`;
+      const m = String(p).match(PERIOD_RE);
+      const label = m ? `Q${m[2]}` : p;
+      return `<option value="${esc(p)}" ${sel}>${esc(label)}</option>`;
     })
     .join("");
 
   return `
-    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0;">
-      <div style="font-weight:900;">기준 연도/분기</div>
-      <select id="matPeriod" data-mat-field="period"
-        ${safePeriods.length ? "" : "disabled"}
-        style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
-        ${options || `<option value="">—</option>`}
-      </select>
+    <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin:10px 0;">
+      ${yearSelect}
+
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <div style="font-weight:900;">기준 분기</div>
+        <select id="matPeriod" data-mat-field="period"
+          ${safePeriods.length ? "" : "disabled"}
+          style="padding:10px 12px; border:1px solid #e5e7eb; border-radius:14px; background:#fff;">
+          ${options || `<option value="">—</option>`}
+        </select>
+        ${matCalcState.year && safePeriods.length ? `<span class="muted">(${esc(matCalcState.year)}년)</span>` : ""}
+      </div>
     </div>
   `;
 }
@@ -1905,6 +1981,19 @@ async function init() {
     infoEl.addEventListener("change", (e) => {
       const t = e.target;
 
+      // 자재비 연도
+      if (t && t.matches('select[data-mat-field="year"]')) {
+        matCalcState.year = t.value;
+        // 해당 연도의 최신 분기로 자동 이동
+        const d = countryData?.[selectedISO];
+        if (d) {
+          const ps = listPeriodsOfYear(d, matCalcState.year);
+          matCalcState.period = ps[ps.length - 1] || matCalcState.period;
+        }
+        renderPanel(selectedIsoRaw, selectedName || infoTitle.textContent);
+        return;
+      }
+
       // 분기
       if (t && t.matches('select[data-mat-field="period"]')) {
         matCalcState.period = t.value;
@@ -1945,6 +2034,7 @@ async function init() {
       const k = t?.getAttribute?.("data-matqty");
       if (k) {
         matCalcState.qty[k] = t.value;
+        updateMatRowCost(k);
         updateMatTotal();
         return;
       }
